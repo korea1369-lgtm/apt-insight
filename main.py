@@ -537,8 +537,8 @@ UI_HTML = """
           <div class="slot-config-row">
             <span>비교 단지 수:</span>
             <select id="slotCountSelect" onchange="updateSlotCount(this.value)">
-              <option value="2">2개 단지</option>
-              <option value="3" selected>3개 단지</option>
+              <option value="2" selected>2개 단지</option>
+              <option value="3" >3개 단지</option>
               <option value="4">4개 단지</option>
             </select>
           </div>
@@ -962,7 +962,8 @@ UI_HTML = """
     results.forEach(r => html += `<td style="font-weight:600;">${r.data.stats?.avg_price || '-'}</td>`);
     html += '</tr>';
 
-    html += '<tr><th class="metric-col" style="color:#0284c7;">└ 최근 이평시세</th>';
+    html += '<tr><th class="metric-col" style="color:#0284c7;">└ 최근 이평시세 <span title="최근 실거래가 추세를 통계적으로 반영한 이동평균선(MA)의 가장 최신 종점 가격입니다.
+단발성 특이 거래(급매/이상 최고가) 1~2건에 휘둘리지 않고, 현재 시장에서 형성된 실질적인 '단지 기준 체감 시세'를 뜻합니다." style="cursor:pointer; color:#888; font-size:12px;">&#9432;</span></th>';
     results.forEach(r => html += `<td style="font-weight:700; color:#0284c7;">${r.data.stats?.latest_ma || '-'}</td>`);
     html += '</tr>';
 
