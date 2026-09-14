@@ -589,7 +589,9 @@ UI_HTML = """
               <div id="compareTableWrapper"></div>
             </div>
             <div class="top10-panel">
-              <div class="top10-title">🔥 자주 함께 비교되는 단지 Top 10</div>
+              <!-- HIDDEN RECOMMEND BLOCK 
+<div class="top10-title">🔥 자주 함께 비교되는 단지 Top 10</div>
+ -->
               <div class="top10-tabs" id="top10TabsContainer"></div>
               <div class="top10-list" id="top10ListContainer"></div>
             </div>
