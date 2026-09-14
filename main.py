@@ -410,7 +410,19 @@ UI_HTML = """
     .top10-item { font-size: 12px; color: #334155; padding: 6px 8px; background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; }
   
     .recommend-box { display: none !important; }
-  </style>
+  
+    /* 추천 단지 카드 및 탭 강제 숨김 */
+    .recommend-box, 
+    .recommend-card, 
+    .recommend-container,
+    [id*="recommend"], 
+    [class*="recommend"],
+    .compare-rec-box,
+    .rec-card {
+        display: none !important;
+    }
+
+</style>
 </head>
 <body>
 
