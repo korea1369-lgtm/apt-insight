@@ -742,12 +742,12 @@ UI_HTML = """
   const slotConfigs = [
     { slot: 1, color: "#2563eb", fill: "rgba(37, 99, 235, 0.08)", defaultVal: "힐스테이트범어" },
     { slot: 2, color: "#f97316", fill: "rgba(249, 115, 22, 0.08)", defaultVal: "수성범어W" },
-    { slot: 3, color: "#16a34a", fill: "rgba(22, 163, 74, 0.08)", defaultVal: "청라힐스자이" },
-    { slot: 4, color: "#9333ea", fill: "rgba(147, 51, 234, 0.08)", defaultVal: "힐스테이트대구역" }
+    { slot: 3, color: "#16a34a", fill: "rgba(22, 163, 74, 0.08)", defaultVal: "" },
+    { slot: 4, color: "#9333ea", fill: "rgba(147, 51, 234, 0.08)", defaultVal: "" }
   ];
 
   let currentAreaMode = '84';
-  let currentSlotCount = 2;
+  let currentSlotCount = 3;
   let visibilityFlags = { scatter: true, sma: true, bb: true };
   let chart = null;
   let globalSlotResults = [];
