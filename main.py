@@ -422,6 +422,8 @@ UI_HTML = """
         display: none !important;
     }
 
+
+    .top10-panel { display: none !important; }
 </style>
 </head>
 <body>
