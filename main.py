@@ -412,11 +412,7 @@ UI_HTML = """
     .recommend-box { display: none !important; }
 </style>
 
-    <style>
-      .recommend-box, .recommend-card, .compare-recommend, div:has(> .compare-title), div:has(> span:contains('자주 함께')) {
-        display: none !important;
-      }
-    </style>
+    
     
 </head>
 <body>
@@ -591,15 +587,15 @@ UI_HTML = """
           </div>
 
           <div class="right-side-panel">
-            <div class="compare-panel">
-              <div style="display: none !important;"><div class="compare-title"><span>⚖️ 단지 종합 스펙 & 실거래 비교</span></div>
+            <!-- <div class="compare-panel">
+              <div class="compare-title"><span>⚖️ 단지 종합 스펙 & 실거래 비교</span></div>
               <div id="compareTableWrapper"></div>
             </div>
             <div class="top10-panel">
               <div class="top10-title">🔥 자주 함께 비교되는 단지 Top 10</div>
               <div class="top10-tabs" id="top10TabsContainer"></div>
               <div class="top10-list" id="top10ListContainer"></div>
-            </div>
+            </div> -->
           </div>
         </div>
       </div>
