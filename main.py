@@ -410,10 +410,7 @@ UI_HTML = """
     .top10-item { font-size: 12px; color: #334155; padding: 6px 8px; background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; }
   
     .recommend-box { display: none !important; }
-</style>
-
-    
-    
+  </style>
 </head>
 <body>
 
@@ -587,7 +584,7 @@ UI_HTML = """
           </div>
 
           <div class="right-side-panel">
-            <!-- <div class="compare-panel">
+            <div class="compare-panel">
               <div class="compare-title"><span>⚖️ 단지 종합 스펙 & 실거래 비교</span></div>
               <div id="compareTableWrapper"></div>
             </div>
@@ -595,7 +592,7 @@ UI_HTML = """
               <div class="top10-title">🔥 자주 함께 비교되는 단지 Top 10</div>
               <div class="top10-tabs" id="top10TabsContainer"></div>
               <div class="top10-list" id="top10ListContainer"></div>
-            </div> -->
+            </div>
           </div>
         </div>
       </div>
@@ -763,24 +760,7 @@ UI_HTML = """
     if (overlay) overlay.style.display = show ? 'flex' : 'none';
   }
 
-  
-      // 검색 로그 백그라운드 전송
-      try {
-        const _logApts = slotConfigs.map(c => document.getElementById('aptInput' + c.slot)?.value || '').filter(Boolean);
-        if (_logApts.length > 0) {
-          fetch('/api/log-comparison', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-              apts: _logApts,
-              area_mode: currentAreaMode,
-              period_months: parseInt(document.getElementById('periodSelect')?.value || '24')
-            })
-          }).catch(() => {});
-        }
-      } catch(e) {}
-
-    function resetChartZoom() {
+  function resetChartZoom() {
     if (chart) chart.resetZoom();
   }
 
@@ -1186,35 +1166,3 @@ if __name__ == "__main__":
     # Render는 환경변수 PORT를 주입하므로 os.environ에서 포트를 읽어옵니다.
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)
-
-# --- 사용자 비교 검색 로그 엔드포인트 ---
-@app.post("/api/log-comparison")
-async def log_comparison_route(req: dict):
-    try:
-        apts = [a.strip() for a in req.get("apts", []) if a and a.strip()]
-        if not apts:
-            return {"status": "ignored"}
-        a1 = apts[0] if len(apts) > 0 else None
-        a2 = apts[1] if len(apts) > 1 else None
-        a3 = apts[2] if len(apts) > 2 else None
-        db_target = DB_PATH if 'DB_PATH' in globals() else DB_FILE
-        with sqlite3.connect(db_target) as conn:
-            conn.execute('''
-                CREATE TABLE IF NOT EXISTS search_comparison_logs (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    searched_at TEXT DEFAULT (datetime('now', 'localtime')),
-                    apt1 TEXT,
-                    apt2 TEXT,
-                    apt3 TEXT,
-                    area_mode TEXT,
-                    period_months INTEGER
-                )
-            ''')
-            conn.execute('''
-                INSERT INTO search_comparison_logs (apt1, apt2, apt3, area_mode, period_months)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (a1, a2, a3, req.get("area_mode", "84"), req.get("period_months", 24)))
-            conn.commit()
-    except Exception:
-        pass
-    return {"status": "ok"}
