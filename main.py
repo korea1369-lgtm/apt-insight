@@ -537,7 +537,7 @@ UI_HTML = """
           <div class="slot-config-row">
             <span>비교 단지 수:</span>
             <select id="slotCountSelect" onchange="updateSlotCount(this.value)">
-              <option value="2" selected>2개 단지</option>
+              <option value="2" selected selected>2개 단지</option>
               <option value="3" >3개 단지</option>
               <option value="4">4개 단지</option>
             </select>
@@ -740,8 +740,8 @@ UI_HTML = """
   }
 
   const slotConfigs = [
-    { slot: 1, color: "#2563eb", fill: "rgba(37, 99, 235, 0.08)", defaultVal: "수성범어W" },
-    { slot: 2, color: "#f97316", fill: "rgba(249, 115, 22, 0.08)", defaultVal: "더샵디어엘로" },
+    { slot: 1, color: "#2563eb", fill: "rgba(37, 99, 235, 0.08)", defaultVal: "힐스테이트범어" },
+    { slot: 2, color: "#f97316", fill: "rgba(249, 115, 22, 0.08)", defaultVal: "수성범어W" },
     { slot: 3, color: "#16a34a", fill: "rgba(22, 163, 74, 0.08)", defaultVal: "청라힐스자이" },
     { slot: 4, color: "#9333ea", fill: "rgba(147, 51, 234, 0.08)", defaultVal: "힐스테이트대구역" }
   ];
