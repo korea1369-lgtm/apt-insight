@@ -747,7 +747,7 @@ UI_HTML = """
   ];
 
   let currentAreaMode = '84';
-  let currentSlotCount = 3;
+  let currentSlotCount = 2;
   let visibilityFlags = { scatter: true, sma: true, bb: true };
   let chart = null;
   let globalSlotResults = [];
@@ -962,8 +962,19 @@ UI_HTML = """
     results.forEach(r => html += `<td style="font-weight:600;">${r.data.stats?.avg_price || '-'}</td>`);
     html += '</tr>';
 
-    html += '<tr><th class="metric-col" style="color:#0284c7;">└ 최근 이평시세 <span title="최근 실거래가 추세를 통계적으로 반영한 이동평균선(MA)의 가장 최신 종점 가격입니다.
-단발성 특이 거래(급매/이상 최고가) 1~2건에 휘둘리지 않고, 현재 시장에서 형성된 실질적인 '단지 기준 체감 시세'를 뜻합니다." style="cursor:pointer; color:#888; font-size:12px;">&#9432;</span></th>';
+         html += `<tr>
+       <th class="metric-col" style="color:#0284c7;">
+         <span>└ 최근 이평시세</span>
+         <span class="help-tooltip-trigger">?
+           <div class="help-tooltip-box">
+             <div class="tooltip-title">💡 최근 이평시세(Latest MA)란?</div>
+             <div class="tooltip-def">
+               <strong>정의:</strong> 최근 실거래가 흐름을 통계적으로 가중 반영한 <strong>이동평균선의 가장 최신 종점 가격</strong>입니다.<br>
+               <strong>의미:</strong> 단발성 특이 거래(급매나 이상 최고가) 1~2건에 왜곡되지 않고, <strong>현재 시장에서 형성된 실질적인 '단지 기준 체감 시세'</strong>를 보여줍니다.
+             </div>
+           </div>
+         </span>
+       </th>`;
     results.forEach(r => html += `<td style="font-weight:700; color:#0284c7;">${r.data.stats?.latest_ma || '-'}</td>`);
     html += '</tr>';
 
@@ -972,11 +983,16 @@ UI_HTML = """
         <span>6. 가격 분산도</span>
         <span class="help-tooltip-trigger">?
           <div class="help-tooltip-box">
-            <div class="tooltip-title">💡 가격 분산도(Price Dispersion)란?</div>
-            <div class="tooltip-def">
-              <strong>정의:</strong> 같은 단지·평형 내 실거래가의 <strong>변동계수(CV% = 표준편차/평균가)</strong>입니다.
-            </div>
-          </div>
+             <div class="tooltip-title">💡 가격 분산도(Price Dispersion)란?</div>
+             <div class="tooltip-def" style="text-align:left; line-height:1.6;">
+               <strong>정의:</strong> 같은 단지·평형 내 실거래가의 <strong>변동계수(CV% = 표준편차/평균가)</strong>입니다.<br><br>
+               <strong>[분산도가 낮고 안정적인 단지의 4대 핵심 가치]</strong><br>
+               <strong>1. 뛰어난 환금성 & 회전율:</strong> 매도·매수 호가 갭이 좁아 거래가 빠르게 성사되고 현금화 예측성이 우수합니다.<br>
+               <strong>2. 강력한 하방 경직성:</strong> 탄탄한 실수요 지지선이 급매 충격을 흡수하여 하락장에서도 가격 방어력이 탁월합니다.<br>
+               <strong>3. 균질한 상품성:</strong> 동·층별 선호도 편차가 적어 비로열층도 단지 브랜드와 입지 프리미엄을 고르게 공유합니다.<br>
+               <strong>4. 거래 피로도 경감:</strong> 상투나 헐값 매도 위험이 없어 매수·매도자의 탐색 비용과 심리적 스트레스가 적습니다.
+             </div>
+           </div>
         </span>
       </th>`;
     results.forEach(r => html += `<td style="font-weight:700; color:#0f172a;">${r.data.stats?.dispersion || '-'}</td>`);
