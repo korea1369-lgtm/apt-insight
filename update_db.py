@@ -1,167 +1,114 @@
-﻿import os
-import sqlite3
-import requests
+﻿import requests
 import xml.etree.ElementTree as ET
-import pandas as pd
-from datetime import datetime
+import sqlite3
+import datetime
 
 API_URL = "https://apis.data.go.kr/1613000/RTMSDataSvcAptTrade/getRTMSDataSvcAptTrade"
 SERVICE_KEY = "cf3c93776dd439770d18b80d5c35a8ac14ea00bd7e5373a28f872d269514a05a"
 DB_PATH = "apt_data_render_master.db"
 
-if not os.path.exists(DB_PATH):
-    raise FileNotFoundError(f"❌ {DB_PATH} 파일을 찾을 수 없습니다. 프로젝트 루트에 파일이 있는지 확인하세요.")
-
-conn = sqlite3.connect(DB_PATH)
-cur = conn.cursor()
-
-# 1. 기존 취소 거래(수성범어W 등) 일괄 정제
-print("🧹 [1/4] 기존 DB 내 취소/해제 거래 정제 중...")
-cur.execute("""
-    DELETE FROM apt_trades 
-    WHERE (apt_name LIKE '%수성범어W%' OR apt_name LIKE '%범어W%') 
-      AND deal_amount = 86000 
-      AND deal_date LIKE '%12-30%'
-""")
-conn.commit()
-
-# 2. DB 최신 거래일 조회
-max_row = cur.execute("SELECT MAX(deal_date) FROM apt_trades").fetchone()
-last_deal_date = max_row[0] if max_row and max_row[0] else "2026-08-31"
-print(f"📅 현재 DB 최신 거래일: {last_deal_date}")
-
-TARGET_LAWD_CDS = {
+LAWD_CDS = {
     "중구": "27110", "동구": "27140", "서구": "27170", "남구": "27200",
     "북구": "27230", "수성구": "27260", "달서구": "27290", "달성군": "27710"
 }
 
-ym_list = ["202608", "202609"]
-new_trades = []
-
-cur.execute("SELECT apt_name, deal_date, deal_amount, exclu_use_ar, floor FROM apt_trades WHERE deal_date >= '2026-08-01'")
-existing_keys = set(cur.fetchall())
-
-print("🚀 [2/4] 국토부 공공데이터포털 실시간 수집 시작 (대구 전역)...")
-
-for ym in ym_list:
-    for gu_name, lawd in TARGET_LAWD_CDS.items():
-        url = f"{API_URL}?serviceKey={SERVICE_KEY}&LAWD_CD={lawd}&DEAL_YMD={ym}&pageNo=1&numOfRows=9999"
-        try:
-            res = requests.get(url, timeout=10)
-            if res.status_code != 200:
+def fetch_and_clean_month(lawd_cd, deal_ym):
+    params = {
+        "serviceKey": SERVICE_KEY,
+        "LAWD_CD": lawd_cd,
+        "DEAL_YMD": deal_ym,
+        "numOfRows": "4000",
+        "pageNo": "1"
+    }
+    records = []
+    unique_meta = set()
+    
+    try:
+        res = requests.get(API_URL, params=params, timeout=20)
+        root = ET.fromstring(res.text)
+        
+        for item in root.findall(".//item"):
+            # 1. 취소 거래 필터링 (cdealType == 'O' 또는 해제일자 존재 시 제외)
+            cdeal_type = item.findtext("cdealType", "").strip().upper()
+            cdeal_day = item.findtext("cdealDay", "").strip()
+            if cdeal_type == "O" or len(cdeal_day) >= 5:
                 continue
-            root = ET.fromstring(res.text)
-            items = root.findall(".//item")
+                
+            apt_name = item.findtext("aptNm", "").strip()
+            year = item.findtext("dealYear", "").strip()
+            month = item.findtext("dealMonth", "").strip().zfill(2)
+            day = item.findtext("dealDay", "").strip().zfill(2)
+            deal_date = f"{year}-{month}-{day}"
             
-            for item in items:
-                cdeal_day = (item.findtext("cdealDay") or "").strip()
-                cdeal_type = (item.findtext("cdealType") or "").strip()
-                if cdeal_day or (cdeal_type in ['O', 'Y', '1']):
-                    continue
-                
-                apt_name = (item.findtext("aptNm") or "").strip()
-                if not apt_name:
-                    continue
-                
-                year = (item.findtext("dealYear") or "").strip()
-                month = (item.findtext("dealMonth") or "").strip().zfill(2)
-                day = (item.findtext("dealDay") or "").strip().zfill(2)
-                deal_date = f"{year}-{month}-{day}"
-                
-                deal_amount_str = (item.findtext("dealAmount") or "0").replace(",", "").strip()
-                deal_amount = int(deal_amount_str)
-                exclu_use_ar = round(float(item.findtext("excluUseAr") or 0), 2)
-                floor_str = (item.findtext("floor") or "0").strip()
-                floor = int(floor_str) if floor_str and floor_str != "-" else 0
-                
-                key = (apt_name, deal_date, deal_amount, exclu_use_ar, floor)
-                if key not in existing_keys:
-                    new_trades.append((apt_name, lawd, deal_date, deal_amount, exclu_use_ar, floor))
-                    existing_keys.add(key)
-        except Exception as e:
-            print(f"⚠️ {gu_name} {ym} 호출 오류: {e}")
+            amt_str = item.findtext("dealAmount", "0").replace(",", "").strip()
+            deal_amount = int(amt_str) if amt_str.isdigit() else 0
+            
+            area_str = item.findtext("excluUseAr", "0").strip()
+            exclu_use_ar = float(area_str) if area_str else 0.0
+            
+            flr_str = item.findtext("floor", "0").strip()
+            floor = int(flr_str) if flr_str.lstrip('-').isdigit() else 0
+            
+            # 2. 메타데이터 기반 순수 API 중복 전송분 디듀프
+            rgst_date = item.findtext("rgstDate", "").strip()
+            agent_sgg = item.findtext("estateAgentSggNm", "").strip()
+            buyer_gbn = item.findtext("buyerGbn", "").strip()
+            sler_gbn = item.findtext("slerGbn", "").strip()
+            jibun = item.findtext("jibun", "").strip()
+            
+            meta_key = (apt_name, jibun, deal_date, deal_amount, exclu_use_ar, floor, rgst_date, agent_sgg, buyer_gbn, sler_gbn)
+            if meta_key in unique_meta:
+                continue
+            unique_meta.add(meta_key)
+            
+            records.append((apt_name, lawd_cd, deal_date, deal_amount, exclu_use_ar, floor))
+    except Exception as e:
+        print(f"⚠️ 에러 발생 ({lawd_cd}, {deal_ym}): {e}")
+        
+    return records
 
-print(f"✨ 신규 정상 거래 발견: 총 {len(new_trades):,}건")
+def run_update():
+    print("=" * 65)
+    print("🚀 [자동 업데이트 파이프라인] 실거래 수집 및 무결성 동기화 시작")
+    print("=" * 65)
+    
+    # 최근 3개월치(해제 신고 감안) 재수집 범위 설정
+    now = datetime.datetime.now()
+    target_months = []
+    for i in range(3):
+        dt = now - datetime.timedelta(days=i*30)
+        target_months.append(dt.strftime("%Y%m"))
+    target_months = sorted(list(set(target_months)))
+    
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    
+    for ym in target_months:
+        print(f"📡 {ym} 데이터 무결성 검증 및 갱신 중...")
+        start_date = f"{ym[:4]}-{ym[4:]}-01"
+        end_date = f"{ym[:4]}-{ym[4:]}-31"
+        
+        all_month_trades = []
+        for gu_name, lawd_cd in LAWD_CDS.items():
+            all_month_trades.extend(fetch_and_clean_month(lawd_cd, ym))
+            
+        # 해당 월 데이터 원자적 교체 (취소/중복 원천 방지)
+        cur.execute("DELETE FROM apt_trades WHERE deal_date BETWEEN ? AND ?", (start_date, end_date))
+        cur.executemany("""
+            INSERT INTO apt_trades (apt_name, lawd_cd, deal_date, deal_amount, exclu_use_ar, floor)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, all_month_trades)
+        conn.commit()
+    
+    print("\n" + "=" * 65)
+    print("📊 핵심 단지 정합성 최종 확인")
+    print("=" * 65)
+    for target in ["더샵디어엘로", "e편한세상범어"]:
+        cur.execute("SELECT COUNT(*) FROM apt_trades WHERE apt_name LIKE ? AND deal_date >= '2026-01-01'", (f"%{target}%",))
+        cnt = cur.fetchone()[0]
+        print(f"▶ [{target}] 2026년 거래량: {cnt}건")
+        
+    conn.close()
 
-# 3. 신규 거래 적재
-if new_trades:
-    cur.executemany("""
-        INSERT INTO apt_trades (apt_name, lawd_cd, deal_date, deal_amount, exclu_use_ar, floor)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, new_trades)
-    conn.commit()
-    print("✅ DB 신규 실거래 삽입 완료!")
-
-# 4. 연도별 랭킹 요약 캐시 재생성
-print("📊 [3/4] 2010~2026 랭킹 요약 캐시 재계산 중...")
-cur.execute("DROP TABLE IF EXISTS apt_rank_yearly_summary;")
-cur.execute("""
-    CREATE TABLE apt_rank_yearly_summary AS
-    WITH ranked_max AS (
-        SELECT 
-            CAST(SUBSTR(deal_date, 1, 4) AS INTEGER) AS deal_year,
-            apt_name,
-            SUBSTR(lawd_cd, 1, 5) AS lawd_5,
-            deal_date,
-            deal_amount,
-            exclu_use_ar,
-            floor,
-            ROW_NUMBER() OVER (
-                PARTITION BY CAST(SUBSTR(deal_date, 1, 4) AS INTEGER), apt_name, SUBSTR(lawd_cd, 1, 5)
-                ORDER BY deal_amount DESC
-            ) as rn
-        FROM apt_trades
-        WHERE deal_date >= '2010-01-01' AND apt_name IS NOT NULL AND apt_name != ''
-    ),
-    stats_summary AS (
-        SELECT 
-            CAST(SUBSTR(deal_date, 1, 4) AS INTEGER) AS deal_year,
-            apt_name,
-            SUBSTR(lawd_cd, 1, 5) AS lawd_5,
-            COUNT(*) AS total_trade_cnt,
-            SUM(CASE WHEN exclu_use_ar >= 83.0 AND exclu_use_ar <= 85.99 THEN 1 ELSE 0 END) AS trade_cnt_84,
-            SUM(CASE WHEN exclu_use_ar >= 58.0 AND exclu_use_ar <= 60.99 THEN 1 ELSE 0 END) AS trade_cnt_59,
-            ROUND(MAX(deal_amount / 10000.0), 3) AS max_price,
-            ROUND(AVG(deal_amount / 10000.0), 2) AS avg_price,
-            ROUND(MAX(deal_amount / (exclu_use_ar / 3.30578)), 1) AS max_pyeong,
-            ROUND(AVG(deal_amount / (exclu_use_ar / 3.30578)), 1) AS avg_pyeong,
-            ROUND(MAX(CASE WHEN exclu_use_ar >= 83.0 AND exclu_use_ar <= 85.99 THEN deal_amount / 10000.0 END), 3) AS max_84_price,
-            ROUND(AVG(CASE WHEN exclu_use_ar >= 83.0 AND exclu_use_ar <= 85.99 THEN deal_amount / 10000.0 END), 2) AS avg_84_price,
-            ROUND(MAX(CASE WHEN exclu_use_ar >= 58.0 AND exclu_use_ar <= 60.99 THEN deal_amount / 10000.0 END), 3) AS max_59_price,
-            ROUND(AVG(CASE WHEN exclu_use_ar >= 58.0 AND exclu_use_ar <= 60.99 THEN deal_amount / 10000.0 END), 2) AS avg_59_price,
-            AVG(deal_amount / (exclu_use_ar / 3.30578)) as mean_pyeong,
-            AVG((deal_amount / (exclu_use_ar / 3.30578)) * (deal_amount / (exclu_use_ar / 3.30578))) as mean_sq_pyeong
-        FROM apt_trades
-        WHERE deal_date >= '2010-01-01' AND apt_name IS NOT NULL AND apt_name != ''
-        GROUP BY CAST(SUBSTR(deal_date, 1, 4) AS INTEGER), apt_name, SUBSTR(lawd_cd, 1, 5)
-    )
-    SELECT 
-        s.deal_year, s.apt_name, s.lawd_5,
-        s.total_trade_cnt, s.trade_cnt_84, s.trade_cnt_59,
-        s.max_price, s.avg_price, s.max_pyeong, s.avg_pyeong,
-        s.max_84_price, s.avg_84_price, s.max_59_price, s.avg_59_price,
-        r.deal_date AS max_p_date,
-        ROUND(r.exclu_use_ar, 1) AS max_p_area,
-        ROUND((r.exclu_use_ar / 3.30578) * 1.3, 1) AS max_p_pyeong_est,
-        COALESCE(r.floor, '-') AS max_p_floor,
-        CASE 
-            WHEN s.total_trade_cnt >= 2 AND s.mean_pyeong > 0 AND (s.mean_sq_pyeong - (s.mean_pyeong * s.mean_pyeong)) > 0
-            THEN ROUND((SQRT(s.mean_sq_pyeong - (s.mean_pyeong * s.mean_pyeong)) / s.mean_pyeong) * 100.0, 1)
-            ELSE 0.0
-        END AS dispersion_cv
-    FROM stats_summary s
-    LEFT JOIN ranked_max r
-      ON s.deal_year = r.deal_year AND s.apt_name = r.apt_name AND s.lawd_5 = r.lawd_5 AND r.rn = 1;
-""")
-
-cur.execute("CREATE INDEX IF NOT EXISTS idx_rank_lookup ON apt_rank_yearly_summary(deal_year, lawd_5);")
-cur.execute("CREATE INDEX IF NOT EXISTS idx_trade_name ON apt_trades(apt_name);")
-conn.commit()
-
-# 5. 공간 압축
-print("🧹 [4/4] VACUUM 압축 실행 중...")
-cur.execute("VACUUM;")
-conn.close()
-
-size_mb = os.path.getsize(DB_PATH) / (1024 * 1024)
-print(f"\n🎉 모든 업데이트 완료! 최종 DB 용량: {size_mb:.2f} MB")
+if __name__ == "__main__":
+    run_update()
