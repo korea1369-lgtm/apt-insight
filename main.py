@@ -1076,7 +1076,8 @@ UI_HTML = """
         const cfg = slotConfigs[i];
 
         try {
-          const res = await fetch(&exclude_direct=${document.getElementById("excludeDirectChk")?.checked ? "true" : "false"}`/api/chart-data?apt_name=${encodeURIComponent(aptName)}&months=${months}&area_type=${currentAreaMode}&exclude_direct=${document.getElementById("excludeDirectChk")?.checked ? "true" : "false"}`);
+      const excludeDirect = document.getElementById("excludeDirectChk")?.checked ? "true" : "false";
+      const res = await fetch(`/api/chart-data?apt_name=${encodeURIComponent(name)}&months=${currentMonths}&area_type=${currentAreaType}&exclude_direct=${excludeDirect}`);
           const data = await res.json();
           slotResults.push({ cfg, aptName: data.pure_name || aptName, data });
         } catch(err) {}
