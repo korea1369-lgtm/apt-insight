@@ -294,6 +294,14 @@ UI_HTML = """
 <!DOCTYPE html>
 <html lang="ko">
 <head>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-Y963ENFXT7"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-Y963ENFXT7');
+  </script>
   <meta charset="UTF-8">
   <title>전국 아파트 실거래가 기술적 분석실 (Render 배포용)</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
