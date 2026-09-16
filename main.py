@@ -548,7 +548,7 @@ UI_HTML = """
             <button class="filter-btn" onclick="setAreaFilter('59', this)">전용 59㎡ (58~60)</button>
             <button class="filter-btn" onclick="setAreaFilter('all', this)">전체 평형(평당가)</button>
       <label style="display:inline-flex; align-items:center; gap:6px; margin-left:12px; font-size:13px; font-weight:700; color:#dc2626; cursor:pointer; background:#fef2f2; border:1px solid #fecaca; padding:5px 12px; border-radius:8px; vertical-align:middle;">
-        <input type="checkbox" id="excludeDirectChk" onchange="window.reloadAllCharts ? window.reloadAllCharts() : location.reload()" style="width:16px; height:16px; cursor:pointer; accent-color:#dc2626;">
+        <input type="checkbox" id="excludeDirectChk" onchange="fetchAndRender();" style="width:16px; height:16px; cursor:pointer; accent-color:#dc2626;">
         🚫 직거래 제외
       </label>
           </div>
