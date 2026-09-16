@@ -59,7 +59,7 @@ def search_apt(q: str = Query("")):
     return matched
 
 @lru_cache(maxsize=128)
-def query_chart_from_db(pure_name: str, months: int, area_type: str):
+def query_chart_from_db(pure_name: str, months: int, area_type: str, exclude_direct: bool = False):
     conn = sqlite3.connect(DB_FILE)
     max_date_row = conn.execute("SELECT MAX(deal_date) FROM apt_trades").fetchone()
     if not max_date_row or not max_date_row[0]:
@@ -70,6 +70,7 @@ def query_chart_from_db(pure_name: str, months: int, area_type: str):
     start_date = end_date - pd.DateOffset(months=months)
     start_str = start_date.strftime("%Y-%m-%d")
 
+    direct_cond = " AND (deal_type IS NULL OR deal_type != '직거래')" if exclude_direct else ""
     area_cond = ""
     params = [pure_name, pure_name, start_str]
     if area_type == "84": area_cond = "AND exclu_use_ar >= 83.0 AND exclu_use_ar <= 85.99"
@@ -81,7 +82,7 @@ def query_chart_from_db(pure_name: str, months: int, area_type: str):
         FROM apt_trades
         WHERE (apt_name = ? OR REPLACE(apt_name, ' ', '') = REPLACE(?, ' ', ''))
           AND deal_date >= ?{direct_clause}
-          {area_cond}
+          {area_cond}{direct_cond}
         ORDER BY deal_date ASC
     """
     df = pd.read_sql_query(query, conn, params=params)
@@ -89,7 +90,7 @@ def query_chart_from_db(pure_name: str, months: int, area_type: str):
     return start_str, max_date_row[0], df.to_dict('records')
 
 @app.get("/api/chart-data")
-def get_chart_data(apt_name: str = Query(...), months: int = Query(12), area_type: str = Query("84")):
+def get_chart_data(apt_name: str = Query(...), months: int = Query(12), area_type: str = Query("84"), exclude_direct: bool = Query(False)):
     pure_name = clean_apt_name(apt_name)
     start_str, max_date, raw_records = query_chart_from_db(pure_name, months, area_type, exclude_direct)
     
@@ -556,6 +557,10 @@ UI_HTML = """
             <button class="filter-btn active" onclick="setAreaFilter('84', this)">전용 84㎡ (83~85)</button>
             <button class="filter-btn" onclick="setAreaFilter('59', this)">전용 59㎡ (58~60)</button>
             <button class="filter-btn" onclick="setAreaFilter('all', this)">전체 평형(평당가)</button>
+    <label style="display:inline-flex; align-items:center; gap:6px; margin-left:12px; font-size:13px; font-weight:700; color:#dc2626; cursor:pointer; background:#fef2f2; border:1px solid #fecaca; padding:6px 12px; border-radius:8px; vertical-align:middle;">
+      <input type="checkbox" id="excludeDirectChk" onchange="loadAllCharts()" style="width:16px; height:16px; cursor:pointer; accent-color:#dc2626;">
+      🚫 직거래 제외
+    </label>
           </div>
         </div>
 
@@ -1071,7 +1076,7 @@ UI_HTML = """
         const cfg = slotConfigs[i];
 
         try {
-          const res = await fetch(`/api/chart-data?apt_name=${encodeURIComponent(aptName)}&months=${months}&area_type=${currentAreaMode}`);
+          const res = await fetch(&exclude_direct=${document.getElementById("excludeDirectChk")?.checked ? "true" : "false"}`/api/chart-data?apt_name=${encodeURIComponent(aptName)}&months=${months}&area_type=${currentAreaMode}&exclude_direct=${document.getElementById("excludeDirectChk")?.checked ? "true" : "false"}`);
           const data = await res.json();
           slotResults.push({ cfg, aptName: data.pure_name || aptName, data });
         } catch(err) {}
