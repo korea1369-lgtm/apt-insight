@@ -81,8 +81,9 @@ def query_chart_from_db(pure_name: str, months: int, area_type: str, exclude_dir
         SELECT deal_date, deal_amount, exclu_use_ar, floor
         FROM apt_trades
         WHERE (apt_name = ? OR REPLACE(apt_name, ' ', '') = REPLACE(?, ' ', ''))
-          AND deal_date >= ?{direct_clause}
-          {area_cond}{direct_cond}
+          AND deal_date >= ?
+          {area_cond}
+          {direct_cond}
         ORDER BY deal_date ASC
     """
     df = pd.read_sql_query(query, conn, params=params)
@@ -558,7 +559,7 @@ UI_HTML = """
             <button class="filter-btn" onclick="setAreaFilter('59', this)">전용 59㎡ (58~60)</button>
             <button class="filter-btn" onclick="setAreaFilter('all', this)">전체 평형(평당가)</button>
     <label style="display:inline-flex; align-items:center; gap:6px; margin-left:12px; font-size:13px; font-weight:700; color:#dc2626; cursor:pointer; background:#fef2f2; border:1px solid #fecaca; padding:6px 12px; border-radius:8px; vertical-align:middle;">
-      <input type="checkbox" id="excludeDirectChk" onchange="loadAllCharts()" style="width:16px; height:16px; cursor:pointer; accent-color:#dc2626;">
+      <input type="checkbox" id="excludeDirectChk" onchange="if(typeof loadAllCharts === 'function'){loadAllCharts();}else if(typeof fetchAllCharts === 'function'){fetchAllCharts();}else if(typeof updateCharts === 'function'){updateCharts();}" style="width:16px; height:16px; cursor:pointer; accent-color:#dc2626;">
       🚫 직거래 제외
     </label>
           </div>
