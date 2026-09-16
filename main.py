@@ -59,7 +59,7 @@ def search_apt(q: str = Query("")):
     return matched
 
 @lru_cache(maxsize=128)
-def query_chart_from_db(pure_name: str, months: int, area_type: str, exclude_direct: bool = False):
+def query_chart_from_db(pure_name: str, months: int, area_type: str):
     conn = sqlite3.connect(DB_FILE)
     max_date_row = conn.execute("SELECT MAX(deal_date) FROM apt_trades").fetchone()
     if not max_date_row or not max_date_row[0]:
@@ -70,20 +70,17 @@ def query_chart_from_db(pure_name: str, months: int, area_type: str, exclude_dir
     start_date = end_date - pd.DateOffset(months=months)
     start_str = start_date.strftime("%Y-%m-%d")
 
-    direct_cond = " AND (deal_type IS NULL OR deal_type != '직거래')" if exclude_direct else ""
     area_cond = ""
     params = [pure_name, pure_name, start_str]
     if area_type == "84": area_cond = "AND exclu_use_ar >= 83.0 AND exclu_use_ar <= 85.99"
     elif area_type == "59": area_cond = "AND exclu_use_ar >= 58.0 AND exclu_use_ar <= 60.99"
 
-    direct_clause = " AND (deal_type IS NULL OR deal_type != '직거래')" if exclude_direct else ""
     query = f"""
         SELECT deal_date, deal_amount, exclu_use_ar, floor
         FROM apt_trades
         WHERE (apt_name = ? OR REPLACE(apt_name, ' ', '') = REPLACE(?, ' ', ''))
           AND deal_date >= ?
           {area_cond}
-          {direct_cond}
         ORDER BY deal_date ASC
     """
     df = pd.read_sql_query(query, conn, params=params)
@@ -91,9 +88,9 @@ def query_chart_from_db(pure_name: str, months: int, area_type: str, exclude_dir
     return start_str, max_date_row[0], df.to_dict('records')
 
 @app.get("/api/chart-data")
-def get_chart_data(apt_name: str = Query(...), months: int = Query(12), area_type: str = Query("84"), exclude_direct: bool = Query(False)):
+def get_chart_data(apt_name: str = Query(...), months: int = Query(12), area_type: str = Query("84")):
     pure_name = clean_apt_name(apt_name)
-    start_str, max_date, raw_records = query_chart_from_db(pure_name, months, area_type, exclude_direct)
+    start_str, max_date, raw_records = query_chart_from_db(pure_name, months, area_type)
     
     conn = sqlite3.connect(DB_FILE)
     cur = conn.cursor()
@@ -232,7 +229,6 @@ def get_rankings(year: int = Query(2026), rank_type: str = Query("price_max"), r
     else:
         units_select = "COALESCE(m.units_str, '-')"
 
-    direct_clause = " AND (deal_type IS NULL OR deal_type != '직거래')" if exclude_direct else ""
     query = f"""
         SELECT 
             s.apt_name, s.lawd_5, 
@@ -296,14 +292,6 @@ UI_HTML = """
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <!-- Google tag (gtag.js) -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-Y963ENFXT7"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-    gtag('config', 'G-Y963ENFXT7');
-  </script>
   <meta charset="UTF-8">
   <title>전국 아파트 실거래가 기술적 분석실 (Render 배포용)</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -558,10 +546,6 @@ UI_HTML = """
             <button class="filter-btn active" onclick="setAreaFilter('84', this)">전용 84㎡ (83~85)</button>
             <button class="filter-btn" onclick="setAreaFilter('59', this)">전용 59㎡ (58~60)</button>
             <button class="filter-btn" onclick="setAreaFilter('all', this)">전체 평형(평당가)</button>
-    <label style="display:inline-flex; align-items:center; gap:6px; margin-left:12px; font-size:13px; font-weight:700; color:#dc2626; cursor:pointer; background:#fef2f2; border:1px solid #fecaca; padding:6px 12px; border-radius:8px; vertical-align:middle;">
-      <input type="checkbox" id="excludeDirectChk" onchange="if(typeof loadAllCharts === 'function'){loadAllCharts();}else if(typeof fetchAllCharts === 'function'){fetchAllCharts();}else if(typeof updateCharts === 'function'){updateCharts();}" style="width:16px; height:16px; cursor:pointer; accent-color:#dc2626;">
-      🚫 직거래 제외
-    </label>
           </div>
         </div>
 
@@ -1077,8 +1061,7 @@ UI_HTML = """
         const cfg = slotConfigs[i];
 
         try {
-      const excludeDirect = document.getElementById("excludeDirectChk")?.checked ? "true" : "false";
-      const res = await fetch(`/api/chart-data?apt_name=${encodeURIComponent(name)}&months=${currentMonths}&area_type=${currentAreaType}&exclude_direct=${excludeDirect}`);
+          const res = await fetch(`/api/chart-data?apt_name=${encodeURIComponent(aptName)}&months=${months}&area_type=${currentAreaMode}`);
           const data = await res.json();
           slotResults.push({ cfg, aptName: data.pure_name || aptName, data });
         } catch(err) {}
