@@ -7,7 +7,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 DB_PATH = "apt_data_render_master.db"
 SERVICE_KEY = "cf3c93776dd439770d18b80d5c35a8ac14ea00bd7e5373a28f872d269514a05a"
-API_URL = "https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev"
+API_URL = "https://apis.data.go.kr/1613000/RTMSDataSvcAptTrade/getRTMSDataSvcAptTrade"
 
 LAWD_CDS = ["27110", "27140", "27170", "27200", "27230", "27260", "27290", "27710", "27720"]
 TARGET_YM = "202609"
