@@ -75,11 +75,12 @@ def query_chart_from_db(pure_name: str, months: int, area_type: str):
     if area_type == "84": area_cond = "AND exclu_use_ar >= 83.0 AND exclu_use_ar <= 85.99"
     elif area_type == "59": area_cond = "AND exclu_use_ar >= 58.0 AND exclu_use_ar <= 60.99"
 
+    direct_clause = " AND (deal_type IS NULL OR deal_type != '직거래')" if exclude_direct else ""
     query = f"""
         SELECT deal_date, deal_amount, exclu_use_ar, floor
         FROM apt_trades
         WHERE (apt_name = ? OR REPLACE(apt_name, ' ', '') = REPLACE(?, ' ', ''))
-          AND deal_date >= ?
+          AND deal_date >= ?{direct_clause}
           {area_cond}
         ORDER BY deal_date ASC
     """
@@ -90,7 +91,7 @@ def query_chart_from_db(pure_name: str, months: int, area_type: str):
 @app.get("/api/chart-data")
 def get_chart_data(apt_name: str = Query(...), months: int = Query(12), area_type: str = Query("84")):
     pure_name = clean_apt_name(apt_name)
-    start_str, max_date, raw_records = query_chart_from_db(pure_name, months, area_type)
+    start_str, max_date, raw_records = query_chart_from_db(pure_name, months, area_type, exclude_direct)
     
     conn = sqlite3.connect(DB_FILE)
     cur = conn.cursor()
@@ -229,6 +230,7 @@ def get_rankings(year: int = Query(2026), rank_type: str = Query("price_max"), r
     else:
         units_select = "COALESCE(m.units_str, '-')"
 
+    direct_clause = " AND (deal_type IS NULL OR deal_type != '직거래')" if exclude_direct else ""
     query = f"""
         SELECT 
             s.apt_name, s.lawd_5, 
