@@ -3,7 +3,7 @@ import xml.etree.ElementTree as ET
 import sqlite3
 import datetime
 
-API_URL = "https://apis.data.go.kr/1613000/RTMSDataSvcAptTrade/getRTMSDataSvcAptTrade"
+API_URL = "https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev"
 SERVICE_KEY = "cf3c93776dd439770d18b80d5c35a8ac14ea00bd7e5373a28f872d269514a05a"
 DB_PATH = "apt_data_render_master.db"
 
@@ -52,6 +52,12 @@ def fetch_and_clean_month(lawd_cd, deal_ym):
             # 2. 메타데이터 기반 순수 API 중복 전송분 디듀프
             rgst_date = item.findtext("rgstDate", "").strip()
             agent_sgg = item.findtext("estateAgentSggNm", "").strip()
+        raw_deal_type = item.findtext("dealingGbn", "").strip()
+        # 중개사 소재지가 없거나 공백이면 100% 법적 직거래
+        if raw_deal_type == "직거래" or not agent_sgg or agent_sgg in ["-", "없음"]:
+            deal_type = "직거래"
+        else:
+            deal_type = "중개거래" 
             buyer_gbn = item.findtext("buyerGbn", "").strip()
             sler_gbn = item.findtext("slerGbn", "").strip()
             jibun = item.findtext("jibun", "").strip()
