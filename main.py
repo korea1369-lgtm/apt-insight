@@ -287,14 +287,6 @@ def get_rankings(year: int = Query(2026), rank_type: str = Query("price_max"), r
         })
     return results
 
-
-# 배포 전 Supabase SQL Editor에서 한 번 실행 (기존 행 삭제 없음):
-# ALTER TABLE public.posts ADD COLUMN IF NOT EXISTS category text
-#   NOT NULL DEFAULT 'real_estate'
-#   CHECK (category IN ('real_estate', 'stock_macro', 'personal_finance'));
-# SSR은 공개 키와 기존 익명 SELECT 권한만 사용합니다.
-# 비공개 글을 노출하는 service_role 키를 사용하지 마세요.
-# 선택 환경변수 SITE_URL=https://실제도메인 (canonical/OG URL 고정)
 INSIGHT_CATEGORIES = {
     "real_estate": "🏢 부동산 분석",
     "stock_macro": "📈 주식·매크로",
@@ -302,9 +294,7 @@ INSIGHT_CATEGORIES = {
 }
 INSIGHT_CSS = '\n    .insight-filters {display:flex;gap:8px;flex-wrap:wrap;margin:20px 0 28px}\n    .insight-filter {border:1px solid #cbd5e1;border-radius:24px;padding:10px 18px;background:white;color:#475569;cursor:pointer;text-decoration:none;font:inherit}\n    .insight-filter.active {background:#0f172a;color:white;border-color:#0f172a}\n    .insight-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px}\n    .insight-card {border:1px solid #e2e8f0;border-radius:18px;overflow:hidden;background:white;transition:transform .2s,box-shadow .2s;min-width:0}\n    .insight-card:hover {transform:translateY(-4px);box-shadow:0 12px 30px #0f172a12}\n    .insight-card a {display:block;color:inherit;text-decoration:none}\n    .insight-card a:focus-visible {outline:3px solid #2563eb;outline-offset:-3px}\n    .insight-cover {aspect-ratio:16/9;background:linear-gradient(135deg,#dbeafe,#eff6ff);display:grid;place-items:center;overflow:hidden;font-size:44px;color:#334155}\n    .insight-cover[data-category="stock_macro"] {background:linear-gradient(135deg,#d1fae5,#ecfdf5)}\n    .insight-cover[data-category="personal_finance"] {background:linear-gradient(135deg,#fef3c7,#fffbeb)}\n    .insight-cover img {width:100%;height:100%;object-fit:cover;grid-area:1/1}\n    .insight-card-body {padding:22px}\n    .insight-badge {display:inline-block;font-size:12px;font-weight:700;color:#0369a1;background:#f0f9ff;border-radius:6px;padding:5px 9px}\n    .insight-card h2 {font-size:20px;line-height:1.5;margin:12px 0 8px;overflow-wrap:anywhere}\n    .insight-excerpt {color:#64748b;font-size:14px;line-height:1.7;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:3.4em;margin:0 0 22px;overflow-wrap:anywhere}\n    .insight-meta {display:flex;justify-content:space-between;gap:12px;color:#64748b;font-size:12px}\n    .insight-status {grid-column:1/-1;padding:48px;text-align:center;color:#64748b}\n    .insight-quick {margin:0 22px 20px;border:0;background:none;color:#0369a1;cursor:pointer;padding:0}\n    @media(max-width:1000px){.insight-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}\n    @media(max-width:620px){.insight-grid{grid-template-columns:1fr}.board-header{flex-wrap:wrap;gap:12px}}\n'
 
-
 def insight_public_posts(params):
-    """Public read only: the same RLS visibility as a logged-out visitor."""
     query = {"select": "*", "board_type": "eq.insight", **params}
     req = urllib.request.Request(
         f"{SUPABASE_URL}/rest/v1/posts?{urllib.parse.urlencode(query)}",
@@ -316,11 +306,9 @@ def insight_public_posts(params):
         raise ValueError("Unexpected posts response")
     return posts
 
-
 def insight_category(post):
     category = post.get("category")
     return category if category in INSIGHT_CATEGORIES else "real_estate"
-
 
 def insight_images(post):
     urls = post.get("image_urls")
@@ -337,7 +325,6 @@ def insight_images(post):
         except ValueError:
             pass
     return valid
-
 
 def insight_document(request, title, description, body, path, metadata="", status=200):
     base = os.environ.get("SITE_URL", "").strip().rstrip("/") or str(request.base_url).rstrip("/")
@@ -364,14 +351,12 @@ footer{{margin-top:40px;color:#64748b;font-size:13px}}</style></head>
 <footer><a href="/insight">투자 인사이트 목록</a> · <a href="/#insight">대시보드로 돌아가기</a></footer></main></body></html>'''
     return HTMLResponse(html, status_code=status)
 
-
 def insight_unavailable(request):
     logging.getLogger(__name__).warning("Public insight data could not be loaded")
     response = insight_document(request, "잠시 후 다시 시도해 주세요", "게시글을 불러올 수 없습니다.",
         '<h1>게시글을 불러올 수 없습니다.</h1><p>잠시 후 다시 접속해 주세요.</p>', request.url.path, status=503)
     response.headers["Retry-After"] = "60"
     return response
-
 
 @app.get("/insight", response_class=HTMLResponse)
 def insight_index(request: Request, category: str = "all", page: int = Query(1, ge=1)):
@@ -410,10 +395,8 @@ def insight_index(request: Request, category: str = "all", page: int = Query(1, 
     path = '/insight' + ('?' + urllib.parse.urlencode({"category": category, "page": page}) if category != 'all' or page != 1 else '')
     return insight_document(request, '투자 인사이트', '부동산 분석, 주식·매크로, 생활금융 칼럼을 만나보세요.', body, path)
 
-
 @app.get("/insight/{post_id}", response_class=HTMLResponse)
 def insight_post(request: Request, post_id: str):
-    # Supports existing integer IDs and UUID IDs without embedding arbitrary PostgREST syntax.
     if not re.fullmatch(r"(?:[0-9]{1,20}|[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})", post_id):
         return insight_document(request, "글을 찾을 수 없습니다", "", '<h1>글을 찾을 수 없습니다.</h1>', request.url.path, status=404)
     try:
@@ -443,7 +426,6 @@ def insight_post(request: Request, post_id: str):
         structured["datePublished"] = date
     if images:
         structured["image"] = images
-    # Escape '<' to prevent a stored </script> from breaking out of JSON-LD.
     metadata += '<script type="application/ld+json">' + json.dumps(structured, ensure_ascii=True).replace('<', '\\u003c') + '</script>'
     return insight_document(request, title, description, body, '/insight/' + post_id, metadata)
 
@@ -667,7 +649,7 @@ UI_HTML = """
       <h2 id="nicknameTitle" style="margin-top:0;font-size:21px;">사이트 전용 닉네임 설정</h2>
       <p id="nicknameHelp" style="font-size:13.5px;color:#cbd5e1;line-height:1.5;">
         카카오톡 실명 대신 게시판에서 활동할 닉네임입니다.<br>
-        <span style="color:#ef4444;font-weight:700;">⚠️ 닉네임은 최초 1회 설정 후 변경할 수 없으니 신중히 입력해 주세요.</span><br>
+        <span style="color:#ef4444;font-weight:700;">⚠️️ 닉네임은 최초 1회 설정 후 변경할 수 없으니 신중히 입력해 주세요.</span><br>
         (한글·영문·숫자 2~12자)
       </p>
       <input id="nicknameInput" autocomplete="off" spellcheck="false" required placeholder="예: 범어대장, 아인싸러" maxlength="12">
@@ -953,7 +935,7 @@ UI_HTML = """
       <div class="board-container">
         <div class="board-header">
           <div class="board-title-text">✍️ 투자 인사이트 <span style="font-size: 13px; color: #64748b; font-weight: 500;">(운영자 분석 칼럼 공간)</span></div>
-          <button class="btn-write-post" onclick="openWriteModal('insight')">✏️ 인사이트 작성</button>
+          <button id="btnWriteInsight" class="btn-write-post" style="display: none;" onclick="openWriteModal('insight')">✏️ 인사이트 작성</button>
         </div>
         <div id="insightListView">
           <p style="color:#64748b">데이터로 읽는 시장, 일상에 도움이 되는 금융 이야기.</p>
@@ -1321,7 +1303,6 @@ UI_HTML = """
     if (!clickedInside) closeAllDropdowns();
   });
 
-  // 호갱노노 스타일: 비교표 헤더에서 단지명을 누르면 해당 단지 전용 이야기 모달 오픈
   function renderCompareTable(results) {
     const wrapper = document.getElementById('compareTableWrapper');
     if (!wrapper) return;
@@ -1550,6 +1531,9 @@ UI_HTML = """
   const SUPABASE_AUTH_KEY = "sb_publishable_eIzC8sNZ6gBe62KixTRm1w_1dE2dNG9";
   const supabaseClient = supabase.createClient(SUPABASE_AUTH_URL, SUPABASE_AUTH_KEY);
 
+  // 운영자 고유 식별 번호 (관리자 전용 잠금)
+  const ADMIN_UID = 'c29ebf61-5caf-4ff4-b119-d2aec688e1be';
+
   let currentUser = null;
   let siteNickname = '';
   let authStarted = false;
@@ -1559,6 +1543,12 @@ UI_HTML = """
     nickEl('btnKakaoLogin').style.display = currentUser ? 'none' : 'flex';
     nickEl('userProfile').style.display = currentUser && siteNickname ? 'flex' : 'none';
     nickEl('userName').textContent = siteNickname ? '🏷️ ' + siteNickname + '님' : '';
+
+    // 투자 인사이트 작성 버튼: 로그인한 사용자가 운영자 UID와 일치할 때만 노출
+    const insightBtn = document.getElementById('btnWriteInsight');
+    if (insightBtn) {
+      insightBtn.style.display = (currentUser && currentUser.id === ADMIN_UID) ? 'flex' : 'none';
+    }
   }
 
   function openNicknameModal() {
@@ -1691,7 +1681,6 @@ UI_HTML = """
 
       document.getElementById('aptStoryCount').innerText = posts ? posts.length : 0;
 
-      // 갤러리 이미지 모아보기
       const allImages = [];
       posts?.forEach(p => {
         if (p.image_urls && p.image_urls.length > 0) {
@@ -1955,7 +1944,6 @@ UI_HTML = """
     }
   }
 
-  // ===== 브라우저 이미지 자동 다운사이징 & 압축 처리기 =====
   async function resizeImage(file, maxWidth = 1200, quality = 0.8) {
     return new Promise((resolve, reject) => {
       const img = new Image();
