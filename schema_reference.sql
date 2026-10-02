@@ -1,0 +1,64 @@
+CREATE TABLE apt_meta_master(
+  apt_name TEXT,
+  norm_name TEXT,
+  built_year INT,
+  built_str TEXT,
+  units_str TEXT,
+  units_84_str TEXT,
+  units_59_str TEXT,
+  type_info TEXT
+);
+
+CREATE TABLE apt_trades (
+        apt_name TEXT,
+        lawd_cd TEXT,
+        deal_date TEXT,
+        deal_amount INTEGER,
+        exclu_use_ar REAL,
+        floor INTEGER
+    , deal_type TEXT DEFAULT '중개거래', estate_agent_sgg_nm TEXT);
+
+CREATE TABLE apt_cancelled_trades (
+        apt_name TEXT,
+        deal_date TEXT,
+        deal_amount INTEGER,
+        exclu_use_ar REAL,
+        floor INTEGER,
+        PRIMARY KEY (apt_name, deal_date, deal_amount, exclu_use_ar, floor)
+    );
+
+CREATE TABLE apt_rank_yearly_summary(
+  deal_year INT,
+  apt_name TEXT,
+  lawd_5,
+  total_trade_cnt,
+  trade_cnt_84,
+  trade_cnt_59,
+  max_price,
+  avg_price,
+  max_pyeong,
+  avg_pyeong,
+  max_84_price,
+  avg_84_price,
+  max_59_price,
+  avg_59_price,
+  max_p_date TEXT,
+  max_p_area,
+  max_p_pyeong_est,
+  max_p_floor,
+  dispersion_cv
+);
+
+CREATE INDEX idx_meta_norm ON apt_meta_master(norm_name);
+
+CREATE INDEX idx_trade_name ON apt_trades(apt_name);
+
+CREATE INDEX idx_rank_lookup ON apt_rank_yearly_summary(deal_year, lawd_5);
+
+CREATE TABLE _db_sync_touch (id INTEGER PRIMARY KEY, updated_at TEXT);
+
+CREATE INDEX idx_trades_lookup ON apt_trades(apt_name, deal_date, deal_amount, exclu_use_ar, floor);
+
+CREATE INDEX idx_apt_trades_deal_type ON apt_trades(deal_type);
+
+CREATE INDEX idx_apt_trades_agent ON apt_trades(estate_agent_sgg_nm);

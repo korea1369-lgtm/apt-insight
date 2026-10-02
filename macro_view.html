@@ -1,0 +1,1511 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>부동산 매크로 분석 플랫폼</title>
+  <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+    :root {
+      --bg: #131722;
+      --panel: #1e222d;
+      --border: #2a2e39;
+      --text: #d1d4dc;
+      --text-muted: #787b86;
+      --accent: #2962ff;
+      --cyan: #00bcd4;
+      --hover: #2a2e39;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Segoe UI", sans-serif; }
+    body { background-color: var(--bg); color: var(--text); display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+    header {
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      height: 48px;
+      display: flex;
+      align-items: center;
+      padding: 0 14px;
+      gap: 12px;
+      user-select: none;
+      z-index: 100;
+      flex-shrink: 0;
+    }
+    .brand { font-weight: 800; font-size: 1.05rem; color: #fff; margin-right: 6px; }
+    .brand span { color: var(--accent); }
+
+    .indicator-tags { display: flex; align-items: center; gap: 8px; }
+    .ind-tag {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 3px 8px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #fff;
+    }
+    .ind-tag .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .ind-tag .cat-label {
+      font-size: 0.72rem;
+      padding: 1px 4px;
+      border-radius: 3px;
+      background: #2a2e39;
+      color: #9aa0a6;
+    }
+    .ind-tag .remove-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 0.95rem;
+      margin-left: 2px;
+    }
+    .ind-tag .remove-btn:hover { color: #f05350; }
+
+    .nav-btn {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: #fff;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 0.84rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      transition: 0.15s;
+    }
+    .nav-btn:hover { background: #2a2e39; border-color: #434651; }
+    .btn-indicator { color: var(--cyan); border-color: rgba(0, 188, 212, 0.4); background: rgba(0, 188, 212, 0.08); }
+    .btn-indicator:hover { background: rgba(0, 188, 212, 0.2); border-color: var(--cyan); }
+
+    #workspace {
+      flex: 1;
+      display: flex;
+      position: relative;
+      width: 100%;
+      height: calc(100vh - 48px);
+      overflow: hidden;
+    }
+
+    #sidebar-toolbar {
+      width: 46px;
+      background: var(--bg);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 6px 0;
+      gap: 4px;
+      z-index: 50;
+      user-select: none;
+      flex-shrink: 0;
+    }
+    .side-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 4px;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 1.1rem;
+      transition: 0.15s;
+    }
+    .side-btn:hover { background: var(--hover); color: #fff; }
+    .side-btn.active { background: #2a2e39; color: var(--accent); border-left: 3px solid var(--accent); }
+    .side-sep { width: 28px; height: 1px; background: var(--border); margin: 4px 0; }
+
+    #charts-stack {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      width: calc(100% - 46px);
+      position: relative;
+      overflow: hidden;
+    }
+
+    #main-chart-wrap {
+      flex: 1;
+      min-height: 140px;
+      position: relative;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+    #main-chart-container { flex: 1; width: 100%; height: 100%; position: relative; }
+
+    #measure-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 30;
+      pointer-events: none;
+    }
+    #time-axis-badge {
+      position: absolute;
+      bottom: 2px;
+      left: 0;
+      transform: translateX(-50%);
+      display: none;
+      pointer-events: none;
+      z-index: 45;
+      background: #2962ff;
+      color: #fff;
+      padding: 2px 7px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      border-radius: 3px;
+    }
+    .measure-badge {
+      position: absolute;
+      display: none;
+      pointer-events: none;
+      z-index: 40;
+      background: rgba(24, 27, 36, 0.94);
+      border: 1px solid var(--accent);
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 0.82rem;
+      backdrop-filter: blur(4px);
+      white-space: nowrap;
+      transform: translate(-50%, -100%);
+      margin-top: -12px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    }
+    .measure-badge.protractor { border-color: #ff9800; }
+    .measure-badge .val-main { font-size: 0.95rem; font-weight: 800; }
+    .measure-badge .val-main.up { color: #f05350; }
+    .measure-badge .val-main.down { color: #2962ff; }
+    .measure-badge .val-period { color: #00bcd4; font-size: 0.78rem; font-weight: 700; margin-top: 3px; }
+
+    #sub-panels-container {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      overflow-y: auto;
+      overflow-x: hidden;
+      max-height: 75%;
+    }
+
+    .panel-resizer {
+      height: 6px;
+      background: #181b24;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      cursor: row-resize;
+      transition: background 0.15s;
+      flex-shrink: 0;
+      z-index: 25;
+    }
+    .panel-resizer:hover, .panel-resizer.active { background: var(--accent); }
+
+    .sub-panel-wrap {
+      height: 180px;
+      min-height: 30px;
+      position: relative;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg);
+      flex-shrink: 0;
+      transition: height 0.1s ease-out;
+    }
+    .sub-panel-wrap.collapsed { height: 30px !important; min-height: 30px !important; overflow: hidden; }
+    .sub-panel-wrap.collapsed .sub-chart-box { display: none !important; }
+
+    .sub-panel-header {
+      height: 30px;
+      background: #181b24;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 10px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #9aa0a6;
+      border-bottom: 1px solid var(--border);
+      user-select: none;
+      z-index: 15;
+    }
+    .sub-header-left { display: flex; align-items: center; gap: 8px; }
+    .sub-header-left .sub-name { color: #d1d4dc; }
+    .sub-header-left .sub-val { color: var(--cyan); font-weight: 800; font-size: 0.88rem; }
+
+    .sub-header-tools { display: flex; align-items: center; gap: 4px; }
+    .panel-tool-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      width: 22px;
+      height: 22px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      transition: 0.1s;
+    }
+    .panel-tool-btn:hover { color: #fff; background: #2a2e39; border-color: #434651; }
+    .panel-tool-btn.danger:hover { background: #f05350; border-color: #f05350; }
+
+    .sub-chart-box { flex: 1; width: 100%; height: calc(100% - 30px); position: relative; }
+
+    .chart-legend {
+      position: absolute;
+      top: 10px;
+      left: 14px;
+      z-index: 10;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .legend-row { display: flex; align-items: center; gap: 8px; font-size: 0.88rem; font-weight: 700; }
+
+    /* 트레이딩뷰 Symbol search 모달 규격 (코딩167.png) */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal-card {
+      background: #1e222d;
+      border: 1px solid #363a45;
+      border-radius: 10px;
+      width: 650px;
+      max-height: 600px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+    }
+    .modal-header {
+      padding: 16px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+    }
+    .modal-header h3 { font-size: 1.1rem; color: #fff; font-weight: 700; }
+    .close-btn { background: none; border: none; color: var(--text-muted); font-size: 1.3rem; cursor: pointer; }
+
+    .tv-search-bar {
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #181b24;
+    }
+    .tv-search-icon { color: var(--cyan); font-size: 1.1rem; }
+    .tv-input {
+      flex: 1;
+      background: #131722;
+      border: 1px solid #2962ff;
+      border-radius: 6px;
+      padding: 9px 12px;
+      color: #fff;
+      font-size: 0.95rem;
+      font-weight: 600;
+      outline: none;
+    }
+    .btn-divide {
+      background: #2a2e39;
+      border: 1px solid #363a45;
+      color: #ff9800;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-weight: 800;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+    .btn-divide:hover { background: #363a45; color: #fff; }
+    .btn-submit {
+      background: var(--accent);
+      border: none;
+      color: #fff;
+      padding: 9px 16px;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 0.88rem;
+      cursor: pointer;
+    }
+    .btn-submit:hover { background: #1e4bd8; }
+
+    .modal-cat-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 20px;
+      background: #141720;
+      border-bottom: 1px solid var(--border);
+    }
+    .modal-cat-bar span { font-size: 0.78rem; font-weight: 700; color: var(--text-muted); }
+    .cat-btn {
+      background: #2a2e39;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      padding: 4px 8px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .cat-btn.active { background: var(--accent); color: #fff; }
+
+    .modal-tabs { display: flex; gap: 6px; padding: 8px 20px; border-bottom: 1px solid var(--border); background: #131722; }
+    .m-tab {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      padding: 5px 12px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .m-tab.active { background: #2a2e39; color: #fff; }
+
+    .item-grid-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 20px;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      max-height: 320px;
+    }
+    .select-card {
+      background: #181b24;
+      border: 1px solid #2a2e39;
+      padding: 10px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      transition: 0.12s;
+    }
+    .select-card:hover { background: #2a2e39; border-color: var(--accent); }
+    .card-top { display: flex; align-items: center; justify-content: space-between; }
+    .card-title { font-weight: 700; color: #fff; font-size: 0.92rem; }
+    .card-badge { font-size: 0.72rem; padding: 2px 6px; border-radius: 3px; font-weight: 700; color: #fff; }
+    .card-desc { font-size: 0.78rem; color: var(--text-muted); }
+
+    .ind-card-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 420px;
+    }
+    .ind-card {
+      background: #181b24;
+      border: 1px solid #2a2e39;
+      padding: 12px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: 0.12s;
+    }
+    .ind-card:hover { background: #2a2e39; border-color: var(--cyan); }
+    .ind-card-left { display: flex; flex-direction: column; gap: 3px; }
+    .ind-title { font-weight: 700; color: #fff; font-size: 0.95rem; }
+    .ind-desc { font-size: 0.8rem; color: var(--text-muted); }
+    .ind-card-right { display: flex; align-items: center; gap: 10px; }
+    .ind-select-reg {
+      background: #131722;
+      border: 1px solid #363a45;
+      color: #fff;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      outline: none;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="brand">📈 <span>부동산</span>매크로</div>
+  <div class="indicator-tags" id="tag-container"></div>
+
+  <button class="nav-btn" onclick="openRegionModal()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+    지역 선택 및 비교
+  </button>
+
+  <button class="nav-btn btn-indicator" onclick="openIndicatorModal()">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
+    Indicators (보조지표)
+  </button>
+</header>
+
+<div id="workspace">
+  <!-- 좌측 분석 툴바: 커서, 측정 자, 각도기, 지우개 -->
+  <div id="sidebar-toolbar">
+    <button class="side-btn active" id="tool-cursor" onclick="setSideTool('cursor')" title="기본 커서">┼</button>
+    <div class="side-sep"></div>
+    <button class="side-btn" id="tool-ruler" onclick="setSideTool('ruler')" title="측정 자 (상승률/기간)">📏</button>
+    <button class="side-btn" id="tool-protractor" onclick="setSideTool('protractor')" title="각도기 (기울기/상승각)">📐</button>
+    <div class="side-sep"></div>
+    <button class="side-btn" onclick="clearMeasure()" title="측정값 지우기">🗑️</button>
+  </div>
+
+  <div id="charts-stack">
+    <div id="main-chart-wrap">
+      <div class="chart-legend" id="legend-box"></div>
+      <div id="main-chart-container"></div>
+      <canvas id="measure-canvas"></canvas>
+      <div class="measure-badge" id="measure-badge"></div>
+      <div id="time-axis-badge"></div>
+    </div>
+    <div id="sub-panels-container"></div>
+  </div>
+</div>
+
+<!-- 1. 트레이딩뷰 Symbol search 모달 (코딩167.png 규격) -->
+<div class="modal-overlay" id="region-modal">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3>Symbol Search (지역 선택 및 수식 비교)</h3>
+      <button class="close-btn" onclick="closeRegionModal()">✕</button>
+    </div>
+
+    <!-- 상단 글자 입력창 및 나누기 컨트롤 바 -->
+    <div class="tv-search-bar">
+      <span class="tv-search-icon">🔍</span>
+      <input type="text" id="tv-symbol-input" class="tv-input" placeholder="지역 선택 시 자동 입력 또는 직접 수식 입력 (예: 서울 전체/대구광역시)" onkeydown="if(event.key==='Enter') submitModalExpr()">
+      <button class="btn-divide" onclick="appendSlash()" title="나누기 기호 삽입">➗ / (나누기)</button>
+      <button class="btn-submit" onclick="submitModalExpr()">확인</button>
+    </div>
+
+    <div class="modal-cat-bar">
+      <span>평형 기준:</span>
+      <button class="cat-btn active" data-cat="84" onclick="setAreaCat('84', this)">국민평형 (84㎡)</button>
+      <button class="cat-btn" data-cat="TOP30" onclick="setAreaCat('TOP30', this)">상위 30단지</button>
+      <button class="cat-btn" data-cat="59" onclick="setAreaCat('59', this)">소형 (59㎡)</button>
+      <button class="cat-btn" data-cat="ALL" onclick="setAreaCat('ALL', this)">전체 평균</button>
+    </div>
+
+    <div class="modal-tabs">
+      <button class="m-tab active" onclick="renderRegionTab('SEOUL', this)">서울 전체/구별</button>
+      <button class="m-tab" onclick="renderRegionTab('METRO', this)">주요 광역시</button>
+      <button class="m-tab" onclick="renderRegionTab('GYEONGGI', this)">경기도 주요 시</button>
+      <button class="m-tab" onclick="renderRegionTab('LOCAL', this)">지방 거점 시</button>
+    </div>
+
+    <div class="item-grid-list" id="region-list-box"></div>
+  </div>
+</div>
+
+<!-- 2. 보조지표 선택 모달 -->
+<div class="modal-overlay" id="indicator-modal">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3>보조지표 (Indicators) 선택</h3>
+      <button class="close-btn" onclick="closeIndicatorModal()">✕</button>
+    </div>
+    <div class="modal-tabs">
+      <button class="m-tab active" onclick="renderIndTab('ALL', this)">전체 지표</button>
+      <button class="m-tab" onclick="renderIndTab('VAL', this)">가치평가 (PIR / HAI / 전세가율)</button>
+      <button class="m-tab" onclick="renderIndTab('MACRO', this)">거시/금리 (기준금리 / 가계부채)</button>
+      <button class="m-tab" onclick="renderIndTab('SUPPLY', this)">수급/수익률 (미분양 / 전환율)</button>
+    </div>
+    <div class="ind-card-list" id="ind-list-box"></div>
+  </div>
+</div>
+
+<script>
+  let mainChart = null;
+  let allSymbols = [];
+  let allIndicators = [];
+  let activeIndicators = [];
+  let activeSubPanels = [];
+  let currentAreaCat = '84';
+  let isBroadcasting = false;
+  let maximizedPanelId = null;
+
+  // Shared monthly calendar: logical index N must mean the same date in every chart.
+  const syncedCharts = new Map();
+  let syncCalendar = [];
+  let sharedLogicalRange = null;
+  let syncingRange = false;
+  let syncLayoutFrame = null;
+  let sharedAxisWidth = 70;
+
+  function sameLogicalRange(a, b) {
+    return a && b && Math.abs(a.from - b.from) < 0.000001 && Math.abs(a.to - b.to) < 0.000001;
+  }
+
+  function applySharedRange() {
+    if (!sharedLogicalRange) return;
+    syncedCharts.forEach((entry, chart) => {
+      const scale = chart.timeScale();
+      if (!sameLogicalRange(scale.getVisibleLogicalRange(), sharedLogicalRange)) {
+        scale.setVisibleLogicalRange(sharedLogicalRange);
+      }
+    });
+  }
+
+  function syncVisibleRange(source, range) {
+    if (syncingRange || !range || !syncedCharts.has(source)) return;
+    syncingRange = true;
+    try {
+      sharedLogicalRange = { from: range.from, to: range.to };
+      applySharedRange();
+    } finally { syncingRange = false; }
+    scheduleSyncLayout();
+  }
+
+  function scheduleSyncLayout() {
+    if (syncLayoutFrame !== null) return;
+    syncLayoutFrame = requestAnimationFrame(() => {
+      syncLayoutFrame = null;
+      const visible = [...syncedCharts.entries()].filter(([, e]) => e.container.clientWidth > 0 && e.container.clientHeight > 0);
+      if (!visible.length) return;
+      // A scrollbar in the sub-panel stack must not shorten only its plot area.
+      const width = Math.min(...visible.map(([, e]) => e.container.clientWidth));
+      sharedAxisWidth = Math.ceil(Math.max(sharedAxisWidth, ...visible.map(([c]) => c.priceScale('right').width())));
+      syncingRange = true;
+      try {
+        visible.forEach(([chart, entry]) => {
+          chart.applyOptions({ width, height: entry.container.clientHeight,
+            rightPriceScale: { minimumWidth: sharedAxisWidth } });
+        });
+        applySharedRange();
+      } finally { syncingRange = false; }
+    });
+  }
+
+  function registerSyncedChart(chart, container) {
+    const calendarSeries = chart.addLineSeries({ visible: false, priceScaleId: 'sync-calendar',
+      lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false });
+    const rangeHandler = range => syncVisibleRange(chart, range);
+    const crosshairHandler = param => syncCrosshair(chart, param);
+    const leaveHandler = () => syncCrosshair(chart, null);
+    syncedCharts.set(chart, { container, calendarSeries, rangeHandler, crosshairHandler, leaveHandler });
+    syncingRange = true;
+    try {
+      calendarSeries.setData(syncCalendar.map(time => ({ time })));
+      applySharedRange();
+    } finally { syncingRange = false; }
+    chart.timeScale().subscribeVisibleLogicalRangeChange(rangeHandler);
+    chart.subscribeCrosshairMove(crosshairHandler);
+    container.addEventListener('mouseleave', leaveHandler);
+    scheduleSyncLayout();
+  }
+
+  function unregisterSyncedChart(chart) {
+    const entry = syncedCharts.get(chart);
+    if (!entry) return;
+    chart.timeScale().unsubscribeVisibleLogicalRangeChange(entry.rangeHandler);
+    chart.unsubscribeCrosshairMove(entry.crosshairHandler);
+    entry.container.removeEventListener('mouseleave', entry.leaveHandler);
+    syncedCharts.delete(chart);
+  }
+
+  function setSynchronizedData(series, data) {
+    const times = data.map(item => formatTimeKey(item.time)).concat(syncCalendar).sort();
+    const oldStart = syncCalendar[0];
+    syncingRange = true;
+    try {
+      series.setData(data); // Preserve the API data and all real values exactly.
+      if (times.length) {
+        const first = times[0], last = times[times.length - 1];
+        const calendar = [];
+        let year = Number(first.slice(0, 4)), month = Number(first.slice(5, 7));
+        let time;
+        while ((time = String(year) + '-' + String(month).padStart(2, '0') + '-01') <= last) {
+          calendar.push(time);
+          if (++month === 13) { month = 1; year++; }
+        }
+        if (calendar.length !== syncCalendar.length || calendar[0] !== oldStart) {
+          syncCalendar = calendar;
+          if (sharedLogicalRange && oldStart) {
+            const shift = syncCalendar.indexOf(oldStart);
+            sharedLogicalRange = { from: sharedLogicalRange.from + shift, to: sharedLogicalRange.to + shift };
+          }
+          const whitespace = syncCalendar.map(time => ({ time }));
+          syncedCharts.forEach(entry => entry.calendarSeries.setData(whitespace));
+        }
+      }
+      applySharedRange();
+    } finally { syncingRange = false; }
+    scheduleSyncLayout();
+  }
+
+  function fitMainDataRange() {
+    const times = activeIndicators.flatMap(ind => Object.keys(ind.dataMap || {})).sort();
+    if (!times.length) return;
+    const from = syncCalendar.indexOf(times[0]);
+    const to = syncCalendar.indexOf(times[times.length - 1]);
+    if (from >= 0 && to >= from) syncVisibleRange(mainChart, { from: from - 0.5, to: to + 0.5 });
+  }
+
+  function syncCrosshair(source, param) {
+    if (isBroadcasting) return;
+    isBroadcasting = true;
+    try {
+      if (!param || param.time == null || !param.point || param.point.x < 0 || param.point.y < 0) {
+        syncedCharts.forEach((entry, chart) => chart.clearCrosshairPosition());
+        broadcastCrosshair(null);
+        return;
+      }
+      const key = formatTimeKey(param.time);
+      syncedCharts.forEach((entry, chart) => {
+        const candidates = chart === mainChart ? activeIndicators : activeSubPanels.filter(p => p.chart === chart);
+        const target = candidates.find(i => i.series && Number.isFinite(i.dataMap?.[key])) || candidates.find(i => i.series);
+        if (!target) { chart.clearCrosshairPosition(); return; }
+        const value = target.dataMap?.[key];
+        // Keep the source horizontal line at the pointer; missing target values are not fabricated as zero.
+        const y = chart === source ? param.point.y : entry.container.clientHeight / 2;
+        const price = chart !== source && Number.isFinite(value) ? value : target.series.coordinateToPrice(y);
+        if (Number.isFinite(price)) chart.setCrosshairPosition(price, param.time, target.series);
+        else chart.clearCrosshairPosition();
+      });
+      broadcastCrosshair(param);
+    } finally { isBroadcasting = false; }
+  }
+
+  // 측정 도구 상태
+  let currentTool = 'cursor';
+  let measureStep = 0;
+  let p1 = null, p2 = null;
+
+  const PALETTE = ['#2962ff', '#e91e63', '#00bcd4', '#ff9800', '#4caf50'];
+  const SUB_COLORS = ['#00bcd4', '#ab47bc', '#ff9800', '#4caf50', '#ff5722'];
+  const CAT_LABELS = { '84': '국평84', 'TOP30': '상위30', '59': '소형59', 'ALL': '전체평균' };
+
+  function formatKoreanDate(time) {
+    if (!time) return "";
+    let y, m;
+    if (typeof time === 'string') {
+      const parts = time.split('-');
+      y = parts[0].slice(2);
+      m = parseInt(parts[1], 10);
+    } else if (time.year && time.month) {
+      y = String(time.year).slice(2);
+      m = time.month;
+    } else return String(time);
+    return `${y}년 ${m}월`;
+  }
+
+  function formatTimeKey(t) {
+    if (!t) return "";
+    if (typeof t === 'string') return t.slice(0, 10);
+    return `${t.year}-${String(t.month).padStart(2,'0')}-01`;
+  }
+
+  // 우측 Y축 스크롤 증폭 및 차트 본문 수직 패닝 엔진
+  function attachVerticalScaleAndPan(container, chartInstance, getSeriesList) {
+    let scaleMultiplier = 1.0;
+    let offsetShift = 0.0;
+    let isHoverPriceAxis = false;
+    let isDragging = false;
+    let startY = 0;
+    let startShift = 0;
+
+    function applyTransform() {
+      const seriesList = getSeriesList();
+      seriesList.forEach(s => {
+        if (!s) return;
+        s.applyOptions({
+          autoscaleInfoProvider: (original) => {
+            const res = original();
+            if (!res || !res.priceRange) return res;
+            const mid = (res.priceRange.minValue + res.priceRange.maxValue) / 2 + offsetShift;
+            const halfSpan = ((res.priceRange.maxValue - res.priceRange.minValue) / 2) * scaleMultiplier;
+            return { priceRange: { minValue: mid - halfSpan, maxValue: mid + halfSpan } };
+          }
+        });
+      });
+    }
+
+    container.addEventListener('mousemove', (e) => {
+      if (currentTool !== 'cursor') return;
+      const rect = container.getBoundingClientRect();
+      const onAxis = (e.clientX - rect.left >= rect.width - 70);
+
+      if (onAxis !== isHoverPriceAxis) {
+        isHoverPriceAxis = onAxis;
+        container.style.cursor = isHoverPriceAxis ? 'ns-resize' : 'default';
+        chartInstance.applyOptions({ handleScale: { mouseWheel: !isHoverPriceAxis } });
+      }
+
+      if (isDragging) {
+        const deltaY = e.clientY - startY;
+        const curSeries = getSeriesList()[0];
+        if (curSeries) {
+          const p1 = curSeries.coordinateToPrice(0) || 0;
+          const p2 = curSeries.coordinateToPrice(100) || 100;
+          const pricePerPixel = Math.abs(p1 - p2) / 100.0;
+          offsetShift = startShift + (deltaY * pricePerPixel * scaleMultiplier);
+          applyTransform();
+        }
+      }
+    });
+
+    container.addEventListener('mouseleave', () => {
+      isHoverPriceAxis = false;
+      isDragging = false;
+      container.style.cursor = 'default';
+      chartInstance.applyOptions({ handleScale: { mouseWheel: true } });
+    });
+
+    container.addEventListener('wheel', (e) => {
+      if (!isHoverPriceAxis) return;
+      e.preventDefault(); e.stopPropagation();
+      const factor = e.deltaY < 0 ? 0.85 : 1.18;
+      scaleMultiplier = Math.max(0.05, Math.min(scaleMultiplier * factor, 20.0));
+      applyTransform();
+    }, { passive: false, capture: true });
+
+    container.addEventListener('mousedown', (e) => {
+      if (currentTool !== 'cursor') return;
+      const rect = container.getBoundingClientRect();
+      if (e.clientX - rect.left >= rect.width - 70) return;
+      if (e.button === 0 || e.button === 1) {
+        isDragging = true;
+        startY = e.clientY;
+        startShift = offsetShift;
+        container.style.cursor = 'grabbing';
+      }
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (isDragging) { isDragging = false; container.style.cursor = 'default'; }
+    });
+
+    container.addEventListener('dblclick', () => {
+      scaleMultiplier = 1.0; offsetShift = 0.0; applyTransform();
+    });
+  }
+
+  function initMainChart() {
+    const container = document.getElementById('main-chart-container');
+    mainChart = LightweightCharts.createChart(container, {
+      width: container.clientWidth || 800,
+      height: container.clientHeight || 450,
+      layout: { background: { color: '#131722' }, textColor: '#d1d4dc' },
+      grid: { vertLines: { color: '#1e222d' }, horzLines: { color: '#1e222d' } },
+      crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+      handleScroll: { mouseWheel: true, pressedMouseMove: true },
+      handleScale: { axisPressedMouseMove: { time: true, price: true }, mouseWheel: true },
+      rightPriceScale: { borderColor: '#2a2e39', autoScale: true },
+      timeScale: { borderColor: '#2a2e39', timeVisible: false, rightOffset: 8 },
+      localization: { timeFormatter: (t) => formatKoreanDate(t) }
+    });
+
+    attachVerticalScaleAndPan(container, mainChart, () => activeIndicators.map(i => i.series));
+
+    const canvas = document.getElementById('measure-canvas');
+    function resizeCanvas() {
+      canvas.width = container.clientWidth;
+      canvas.height = container.clientHeight;
+    }
+    resizeCanvas();
+
+    new ResizeObserver(entries => {
+      if (entries.length && mainChart) {
+        scheduleSyncLayout();
+        resizeCanvas();
+        drawTools();
+      }
+    }).observe(container);
+
+    registerSyncedChart(mainChart, container);
+
+    initMeasureEvents(container);
+  }
+
+  function broadcastCrosshair(param) {
+    if (!param || !param.time) {
+      activeSubPanels.forEach(p => {
+        const elem = document.getElementById(`sub-val-${p.id}`);
+        if (elem) elem.innerText = '-';
+      });
+      return;
+    }
+
+    const tKey = formatTimeKey(param.time);
+    let html = `<div style="color:#787b86; font-size:0.85rem; margin-bottom:2px;">${formatKoreanDate(param.time)}</div>`;
+    activeIndicators.forEach(ind => {
+      const v = ind.dataMap ? ind.dataMap[tKey] : null;
+      if (v !== null && v !== undefined) {
+        const unit = ind.expr.includes('/') ? '배' : '만/평';
+          const isPending = (ind.lastTime && (tKey === ind.lastTime || formatTimeKey(param.time) === ind.lastTime));
+          const pendingBadge = isPending 
+            ? ` <span style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; font-size: 0.75rem; padding: 1px 5px; border-radius: 4px; border: 1px solid rgba(245, 158, 11, 0.4); margin-left: 4px;">⚠️ 신고 진행 중 (집계율 불완전)</span>` 
+            : '';
+          html += `<div class="legend-row" style="color:${ind.color};"><span>● ${ind.expr} (${CAT_LABELS[ind.cat]}):</span><span>${v.toLocaleString()} ${unit}${pendingBadge}</span></div>`;
+      }
+    });
+    document.getElementById('legend-box').innerHTML = html;
+
+    activeSubPanels.forEach(p => {
+      const valElem = document.getElementById(`sub-val-${p.id}`);
+      const v = p.dataMap[tKey];
+      if (valElem) valElem.innerText = (v !== undefined && v !== null) ? `${v.toLocaleString()} ${p.unit}` : '-';
+      // Crosshair positions are handled centrally by syncCrosshair().
+    });
+  }
+
+  // ================= 측정 도구 (자 📏 / 각도기 📐) =================
+  function calcPeriod(t1, t2) {
+    if (!t1 || !t2) return "";
+    const d1 = new Date(t1), d2 = new Date(t2);
+    const start = d1 < d2 ? d1 : d2, end = d1 < d2 ? d2 : d1;
+    let months = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+    if (months === 0) return "당월";
+    if (months < 12) return `${months}개월간`;
+    const y = Math.floor(months / 12), m = months % 12;
+    return m > 0 ? `${y}년 ${m}개월간` : `${y}년간`;
+  }
+
+  function getTimeAtCoord(x) {
+    try {
+      const t = mainChart.timeScale().coordinateToTime(x);
+      if (t) return formatKoreanDate(t);
+    } catch(e) {}
+    return null;
+  }
+
+  function setSideTool(toolName) {
+    currentTool = toolName;
+    document.querySelectorAll('.side-btn').forEach(b => b.classList.remove('active'));
+    const target = document.getElementById(`tool-${toolName}`);
+    if (target) target.classList.add('active');
+
+    const isLocked = (toolName === 'ruler' || toolName === 'protractor');
+    mainChart.applyOptions({ handleScroll: !isLocked, handleScale: !isLocked });
+
+    const canvas = document.getElementById('measure-canvas');
+    canvas.style.pointerEvents = isLocked ? 'auto' : 'none';
+    canvas.style.cursor = isLocked ? 'crosshair' : 'default';
+
+    if (toolName === 'cursor') clearMeasure();
+  }
+
+  function clearMeasure() {
+    measureStep = 0; p1 = null; p2 = null;
+    const canvas = document.getElementById('measure-canvas');
+    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+    document.getElementById('measure-badge').style.display = 'none';
+    document.getElementById('time-axis-badge').style.display = 'none';
+  }
+
+  function initMeasureEvents(container) {
+    const canvas = document.getElementById('measure-canvas');
+    const timeBadge = document.getElementById('time-axis-badge');
+
+    window.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { clearMeasure(); setSideTool('cursor'); }
+    });
+
+    canvas.addEventListener('mousedown', e => {
+      if (currentTool === 'cursor') return;
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left, y = e.clientY - rect.top;
+      if (x > rect.width - 70) return;
+
+      const s = activeIndicators[0]?.series;
+      const priceVal = (s && typeof s.coordinateToPrice === 'function') ? s.coordinateToPrice(y) : 0;
+      const timeVal = getTimeAtCoord(x);
+
+      if (measureStep === 0 || measureStep === 2) {
+        measureStep = 1;
+        p1 = { x, y, price: priceVal, time: timeVal };
+        p2 = { x, y, price: priceVal, time: timeVal };
+        drawTools();
+      } else if (measureStep === 1) {
+        measureStep = 2;
+        p2 = { x, y, price: priceVal, time: timeVal };
+        drawTools();
+      }
+    });
+
+    canvas.addEventListener('mousemove', e => {
+      if (currentTool === 'cursor') return;
+      const rect = canvas.getBoundingClientRect();
+      const x = Math.min(Math.max(e.clientX - rect.left, 0), rect.width - 70);
+      const y = Math.min(Math.max(e.clientY - rect.top, 0), rect.height - 25);
+
+      const hoverTime = getTimeAtCoord(x);
+      if (hoverTime) {
+        timeBadge.style.display = 'block';
+        timeBadge.style.left = `${x}px`;
+        timeBadge.innerText = hoverTime;
+      }
+
+      if (measureStep !== 1 || !p1) return;
+      const s = activeIndicators[0]?.series;
+      const priceVal = (s && typeof s.coordinateToPrice === 'function') ? s.coordinateToPrice(y) : 0;
+      p2 = { x, y, price: priceVal, time: hoverTime };
+      drawTools();
+    });
+  }
+
+  function drawTools() {
+    if (!p1 || !p2) return;
+    const canvas = document.getElementById('measure-canvas');
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (currentTool === 'ruler') {
+      const x1 = p1.x, y1 = p1.y, x2 = p2.x, y2 = p2.y;
+      const w = x2 - x1, h = y2 - y1;
+
+      ctx.fillStyle = h <= 0 ? 'rgba(240, 83, 80, 0.1)' : 'rgba(41, 98, 255, 0.1)';
+      ctx.fillRect(x1, y1, w, h);
+      ctx.strokeStyle = h <= 0 ? '#f05350' : '#2962ff';
+      ctx.lineWidth = 1.2;
+      ctx.strokeRect(x1, y1, w, h);
+
+      ctx.beginPath(); ctx.setLineDash([4, 4]); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = '#2962ff';
+      ctx.beginPath(); ctx.arc(x1, y1, 3, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x2, y2, 3, 0, Math.PI*2); ctx.fill();
+
+      if (p1.price && p2.price) {
+        const diff = p2.price - p1.price, pct = (diff / p1.price) * 100, isUp = diff >= 0;
+        const badge = document.getElementById('measure-badge');
+        badge.classList.remove('protractor');
+        badge.style.display = 'block';
+        badge.style.left = `${Math.max(130, Math.min((x1+x2)/2, canvas.width - 130))}px`;
+        badge.style.top = `${Math.max(46, Math.min(y1, y2) - 10)}px`;
+
+        badge.innerHTML = `
+          <div class="val-main ${isUp ? 'up' : 'down'}">${isUp ? '+' : ''}${pct.toFixed(2)}% (${isUp ? '+' : ''}${diff.toLocaleString(undefined, {maximumFractionDigits:1})} 만원)</div>
+          <div class="val-period">📅 ${p1.time || ''} ➔ ${p2.time || ''} (${calcPeriod(p1.time, p2.time)})</div>
+        `;
+      }
+    } else if (currentTool === 'protractor') {
+      const x1 = p1.x, y1 = p1.y, x2 = p2.x, y2 = p2.y;
+      const dx = x2 - x1, dy = y2 - y1;
+      const rad = Math.atan2(-dy, dx), deg = (rad * 180 / Math.PI);
+
+      ctx.beginPath(); ctx.setLineDash([4, 4]); ctx.strokeStyle = '#787b86';
+      ctx.moveTo(x1, y1); ctx.lineTo(x1 + Math.max(70, Math.abs(dx)), y1); ctx.stroke();
+
+      ctx.beginPath(); ctx.setLineDash([]); ctx.strokeStyle = deg >= 0 ? '#f05350' : '#2962ff'; ctx.lineWidth = 2;
+      ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+
+      const badge = document.getElementById('measure-badge');
+      badge.classList.add('protractor');
+      badge.style.display = 'block';
+      badge.style.left = `${Math.max(130, Math.min((x1+x2)/2, canvas.width - 130))}px`;
+      badge.style.top = `${Math.max(46, Math.min(y1, y2) - 10)}px`;
+
+      badge.innerHTML = `
+        <div class="val-main ${deg >= 0 ? 'up' : 'down'}">📐 ${deg >= 0 ? '+' : ''}${deg.toFixed(1)}° (${deg >= 0 ? '상승' : '하락'})</div>
+        <div class="val-period">📅 ${p1.time || ''} ➔ ${p2.time || ''} (${calcPeriod(p1.time, p2.time)})</div>
+      `;
+    }
+  }
+
+  // ================= Symbol Search 모달 (코딩167.png 완벽 대응) =================
+  async function loadSymbols() {
+    const res = await fetch('/api/symbols');
+    const d = await res.json();
+    allSymbols = d.symbols || [];
+  }
+
+  function openRegionModal() {
+    document.getElementById('region-modal').classList.add('show');
+    document.getElementById('tv-symbol-input').value = '';
+    renderRegionTab('SEOUL', document.querySelector('#region-modal .m-tab'));
+  }
+  function closeRegionModal() {
+    document.getElementById('region-modal').classList.remove('show');
+  }
+
+  function setAreaCat(cat, btn) {
+    currentAreaCat = cat;
+    document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+
+  function appendSlash() {
+    const inp = document.getElementById('tv-symbol-input');
+    const cur = inp.value.trim();
+    if (cur && !cur.endsWith('/')) {
+      inp.value = cur + ' / ';
+      inp.focus();
+    }
+  }
+
+  // 아래 카드 클릭 시 상단 글자창에 들어가고, 이미 '/'가 있으면 완성 후 확인 가능
+  function handleCardClick(symName) {
+    const inp = document.getElementById('tv-symbol-input');
+    let cur = inp.value.trim();
+
+    if (!cur) {
+      // 처음 클릭 ➔ 입력창에 반영
+      inp.value = symName;
+    } else if (cur.includes('/')) {
+      // 이미 '/'가 있는 경우 ➔ 뒤쪽에 붙이고 최종 확인 가능하게 세팅
+      const parts = cur.split('/');
+      inp.value = `${parts[0].trim()} / ${symName}`;
+    } else {
+      // 이미 첫 번째 지역이 있을 때 또 클릭하면 교체
+      inp.value = symName;
+    }
+  }
+
+  // 모달 확인 버튼 클릭
+  async function submitModalExpr() {
+    const expr = document.getElementById('tv-symbol-input').value.trim();
+    if (!expr) return;
+    closeRegionModal();
+
+    if (activeIndicators.length >= 5) {
+      alert("최대 5개 지표까지 추가 가능합니다.");
+      return;
+    }
+
+    const usedColors = activeIndicators.map(i => i.color);
+    const color = PALETTE.find(c => !usedColors.includes(c)) || '#2962ff';
+
+    const newInd = { id: Date.now(), expr: expr, cat: currentAreaCat, color: color, series: null, dataMap: {} };
+    activeIndicators.push(newInd);
+    await drawSeries(newInd);
+    renderTags();
+  }
+
+  function renderRegionTab(tabName, btn) {
+    if (btn) {
+      document.querySelectorAll('#region-modal .m-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+
+    const box = document.getElementById('region-list-box');
+    box.innerHTML = '';
+
+    let list = [];
+    const gyeonggiCities = [
+      '수원시', '성남시', '고양시', '용인시', '부천시', '안산시', '안양시', '남양주시',
+      '화성시', '평택시', '의정부시', '시흥시', '파주시', '김포시', '광명시', '광주시',
+      '군포시', '이천시', '오산시', '하남시', '양주시', '구리시', '안성시', '포천시',
+      '의왕시', '여주시', '동두천시', '과천시'
+    ];
+    const localCities = ['청주시', '천안시', '전주시', '포항시', '창원시', '구미시', '원주시', '제주시'];
+
+    if (tabName === 'SEOUL') {
+      list = allSymbols.filter(s => s.category && s.category.startsWith('SEOUL'));
+    } else if (tabName === 'METRO') {
+      list = allSymbols.filter(s => s.category === 'METRO');
+    } else if (tabName === 'GYEONGGI') {
+      list = allSymbols.filter(s => gyeonggiCities.includes(s.symbol) || s.category === 'GYEONGGI_SI');
+    } else if (tabName === 'LOCAL') {
+      list = allSymbols.filter(s => localCities.includes(s.symbol) || s.category === 'LOCAL_SI');
+    } else {
+      list = allSymbols;
+    }
+    list.forEach(item => {
+      const bColor = item.category.startsWith('SEOUL') ? '#2962ff' : (item.category === 'METRO' ? '#9c27b0' : '#ff9800');
+      box.innerHTML += `
+        <div class="select-card" onclick="handleCardClick('${item.symbol}')">
+          <div class="card-top">
+            <span class="card-title">${item.symbol}</span>
+            <span class="card-badge" style="background:${bColor};">${item.category.slice(0,2)}</span>
+          </div>
+          <span class="card-desc">${item.desc} (클릭 시 상단 입력창에 반영)</span>
+        </div>
+      `;
+    });
+  }
+
+  async function drawSeries(ind) {
+    const res = await fetch(`/api/chart_data?expr=${encodeURIComponent(ind.expr)}&cat=${ind.cat}`);
+    const d = await res.json();
+
+    if (d.series && d.series.length > 0) {
+      const s = mainChart.addLineSeries({ color: ind.color, lineWidth: 2 });
+      setSynchronizedData(s, d.series);
+        ind.series = s;
+        if (d.series.length > 0) {
+          const lastItem = d.series[d.series.length - 1];
+          ind.lastTime = lastItem.time;
+          s.setMarkers([{
+            time: lastItem.time,
+            position: 'aboveBar',
+            color: '#f59e0b',
+            shape: 'arrowDown',
+            text: '⚠️'
+          }]);
+        }
+        ind.dataMap = {};
+      d.series.forEach(item => { ind.dataMap[item.time] = item.value; });
+      fitMainDataRange();
+    } else {
+      alert(`${ind.expr} 실거래가 데이터가 없습니다.`);
+      removeInd(ind.id);
+    }
+  }
+
+  function removeInd(id) {
+    const idx = activeIndicators.findIndex(i => i.id === id);
+    if (idx !== -1) {
+      if (activeIndicators[idx].series) mainChart.removeSeries(activeIndicators[idx].series);
+      activeIndicators.splice(idx, 1);
+      renderTags();
+      if (mainChart) fitMainDataRange();
+      clearMeasure();
+    }
+  }
+
+  function renderTags() {
+    const box = document.getElementById('tag-container');
+    box.innerHTML = '';
+    activeIndicators.forEach(ind => {
+      box.innerHTML += `
+        <div class="ind-tag" style="border-left: 3px solid ${ind.color};">
+          <span class="dot" style="background:${ind.color};"></span>
+          <span>${ind.expr}</span>
+          <span class="cat-label">${CAT_LABELS[ind.cat]}</span>
+          <button class="remove-btn" onclick="removeInd(${ind.id})">✕</button>
+        </div>
+      `;
+    });
+  }
+
+  // ================= 보조지표 모달 =================
+  async function loadIndicators() {
+    const res = await fetch('/api/indicators');
+    const d = await res.json();
+    allIndicators = d.indicators || [];
+  }
+
+  function openIndicatorModal() {
+    document.getElementById('indicator-modal').classList.add('show');
+    renderIndTab('ALL', document.querySelector('#indicator-modal .m-tab'));
+  }
+  function closeIndicatorModal() {
+    document.getElementById('indicator-modal').classList.remove('show');
+  }
+
+  function renderIndTab(tab, btn) {
+    if (btn) {
+      document.querySelectorAll('#indicator-modal .m-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+
+    const box = document.getElementById('ind-list-box');
+    box.innerHTML = '';
+
+    let list = allIndicators;
+    if (tab === 'VAL') list = allIndicators.filter(i => ['가치평가', '시장/심리'].includes(i.category));
+    else if (tab === 'MACRO') list = allIndicators.filter(i => ['금리', '유동성'].includes(i.category));
+    else if (tab === 'SUPPLY') list = allIndicators.filter(i => ['공급', '수익률'].includes(i.category));
+
+    list.forEach(ind => {
+      const regSelector = ind.is_regional ? `
+        <select class="ind-select-reg" id="reg-${ind.id}" onclick="event.stopPropagation()">
+          <option value="">Loading regions...</option>
+        </select>
+      ` : '';
+
+      box.innerHTML += `
+        <div class="ind-card" onclick="selectSubIndicator('${ind.id}')">
+          <div class="ind-card-left">
+            <div class="ind-title">📈 ${ind.name}</div>
+            <div class="ind-desc">${ind.desc}</div>
+          </div>
+          <div class="ind-card-right">
+            ${regSelector}
+            <span style="font-size:0.75rem; color:#787b86;">단위: ${ind.unit}</span>
+          </div>
+        </div>
+      `;
+    });
+  }
+
+  async function selectSubIndicator(indId) {
+    const sel = document.getElementById(`reg-${indId}`);
+    const reg = sel ? sel.value : "전국";
+    closeIndicatorModal();
+
+    const ind = allIndicators.find(i => i.id === indId);
+    if (!ind) return;
+
+    const panelId = Date.now();
+    const container = document.getElementById('sub-panels-container');
+    const color = SUB_COLORS[activeSubPanels.length % SUB_COLORS.length];
+
+    const resizer = document.createElement('div');
+    resizer.className = 'panel-resizer';
+    resizer.id = `resizer-${panelId}`;
+    container.appendChild(resizer);
+
+    const wrap = document.createElement('div');
+    wrap.className = 'sub-panel-wrap';
+    wrap.id = `sub-wrap-${panelId}`;
+    wrap.innerHTML = `
+      <div class="sub-panel-header">
+        <div class="sub-header-left">
+          <span style="color:${color};">●</span>
+          <span class="sub-name">${ind.name} (${reg})</span>
+          <span class="sub-val" id="sub-val-${panelId}">-</span>
+        </div>
+        <div class="sub-header-tools">
+          <button class="panel-tool-btn" title="위로 이동" onclick="moveSubPanel(${panelId}, -1)">↑</button>
+          <button class="panel-tool-btn" title="아래로 이동" onclick="moveSubPanel(${panelId}, 1)">↓</button>
+          <button class="panel-tool-btn danger" title="삭제" onclick="removeSubPanel(${panelId})">🗑</button>
+          <button class="panel-tool-btn" title="잠깐 접기/펼치기" onclick="toggleCollapsePanel(${panelId})">⌄</button>
+          <button class="panel-tool-btn" title="전체화면" onclick="toggleMaximizePanel(${panelId})">⛶</button>
+        </div>
+      </div>
+      <div class="sub-chart-box" id="sub-chart-${panelId}"></div>
+    `;
+    container.appendChild(wrap);
+
+    bindPanelResizer(resizer, wrap);
+
+    const chartBox = document.getElementById(`sub-chart-${panelId}`);
+    const chart = LightweightCharts.createChart(chartBox, {
+      width: chartBox.clientWidth || 800,
+      height: chartBox.clientHeight || 150,
+      layout: { background: { color: '#131722' }, textColor: '#d1d4dc' },
+      grid: { vertLines: { color: '#1e222d' }, horzLines: { color: '#1e222d' } },
+      crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+      rightPriceScale: { borderColor: '#2a2e39', autoScale: true },
+      timeScale: { borderColor: '#2a2e39', timeVisible: false },
+      localization: { timeFormatter: (t) => formatKoreanDate(t) }
+    });
+
+    const res = await fetch(`/api/indicator_series?ind_id=${indId}&region=${encodeURIComponent(reg)}`);
+    const d = await res.json();
+
+    const series = chart.addAreaSeries({ topColor: `${color}40`, bottomColor: `${color}00`, lineColor: color, lineWidth: 2 });
+    registerSyncedChart(chart, chartBox);
+    setSynchronizedData(series, d.series);
+
+    attachVerticalScaleAndPan(chartBox, chart, () => [series]);
+
+    const resizeObserver = new ResizeObserver(() => scheduleSyncLayout());
+    resizeObserver.observe(chartBox);
+
+    const dataMap = {};
+    d.series.forEach(item => { dataMap[item.time] = item.value; });
+
+    if (d.series.length > 0) {
+      document.getElementById(`sub-val-${panelId}`).innerText = `${d.series[d.series.length - 1].value.toLocaleString()} ${ind.unit}`;
+    }
+
+    activeSubPanels.push({ id: panelId, unit: ind.unit, chart, series, dataMap, wrap, resizer, resizeObserver });
+
+    scheduleSyncLayout();
+  }
+
+  function bindPanelResizer(resizer, wrap) {
+    let startY = 0, startHeight = 0;
+    resizer.addEventListener('mousedown', (e) => {
+      startY = e.clientY;
+      startHeight = wrap.offsetHeight;
+      resizer.classList.add('active');
+
+      function onMouseMove(moveEvent) {
+        const delta = startY - moveEvent.clientY;
+        const newHeight = Math.max(50, Math.min(startHeight + delta, 600));
+        wrap.style.height = `${newHeight}px`;
+      }
+      function onMouseUp() {
+        resizer.classList.remove('active');
+        window.removeEventListener('mousemove', onMouseMove);
+        window.removeEventListener('mouseup', onMouseUp);
+      }
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mouseup', onMouseUp);
+    });
+  }
+
+  function moveSubPanel(panelId, direction) {
+    const idx = activeSubPanels.findIndex(p => p.id === panelId);
+    if (idx === -1) return;
+    const targetIdx = idx + direction;
+    if (targetIdx < 0 || targetIdx >= activeSubPanels.length) return;
+
+    const container = document.getElementById('sub-panels-container');
+    const cur = activeSubPanels[idx];
+    const target = activeSubPanels[targetIdx];
+    activeSubPanels[idx] = target;
+    activeSubPanels[targetIdx] = cur;
+
+    if (direction < 0) {
+      container.insertBefore(cur.resizer, target.resizer);
+      container.insertBefore(cur.wrap, target.resizer);
+    } else {
+      container.insertBefore(target.resizer, cur.resizer);
+      container.insertBefore(target.wrap, cur.resizer);
+    }
+  }
+
+  function toggleCollapsePanel(panelId) {
+    const p = activeSubPanels.find(x => x.id === panelId);
+    if (!p) return;
+    p.wrap.classList.toggle('collapsed');
+    const isCol = p.wrap.classList.contains('collapsed');
+    const btn = p.wrap.querySelector('.panel-tool-btn[title*="접기"]');
+    if (btn) btn.innerText = isCol ? '⌃' : '⌄';
+  }
+
+  function toggleMaximizePanel(panelId) {
+    const mainWrap = document.getElementById('main-chart-wrap');
+    if (maximizedPanelId === panelId) {
+      mainWrap.style.display = 'flex';
+      activeSubPanels.forEach(p => {
+        p.wrap.style.display = 'flex';
+        p.resizer.style.display = 'block';
+        p.wrap.style.height = '180px';
+      });
+      maximizedPanelId = null;
+    } else {
+      mainWrap.style.display = 'none';
+      activeSubPanels.forEach(p => {
+        if (p.id === panelId) {
+          p.wrap.style.display = 'flex';
+          p.resizer.style.display = 'none';
+          p.wrap.style.height = 'calc(100vh - 54px)';
+        } else {
+          p.wrap.style.display = 'none';
+          p.resizer.style.display = 'none';
+        }
+      });
+      maximizedPanelId = panelId;
+    }
+  }
+
+  function removeSubPanel(panelId) {
+    const idx = activeSubPanels.findIndex(p => p.id === panelId);
+    if (idx !== -1) {
+      activeSubPanels[idx].resizeObserver.disconnect();
+      unregisterSyncedChart(activeSubPanels[idx].chart);
+      activeSubPanels[idx].chart.remove();
+      activeSubPanels[idx].wrap.remove();
+      activeSubPanels[idx].resizer.remove();
+      activeSubPanels.splice(idx, 1);
+      if (maximizedPanelId === panelId) {
+        document.getElementById('main-chart-wrap').style.display = 'flex';
+        maximizedPanelId = null;
+      }
+    }
+  }
+
+  window.addEventListener('DOMContentLoaded', async () => {
+    initMainChart();
+    await loadSymbols();
+    await loadIndicators();
+
+    const ind1 = { id: 1, expr: '서울 전체', cat: '84', color: PALETTE[0], series: null, dataMap: {} };
+    activeIndicators.push(ind1);
+    await drawSeries(ind1);
+
+    const ind2 = { id: 2, expr: '대구광역시', cat: '84', color: PALETTE[1], series: null, dataMap: {} };
+    activeIndicators.push(ind2);
+    await drawSeries(ind2);
+
+    renderTags();
+  });
+</script>
+<!-- BEGIN SAFE_INDICATOR_REGIONS_V1 -->
+<script>
+(() => {
+  'use strict';
+  const originalRender = window.renderIndTab;
+  const originalSelect = window.selectSubIndicator;
+  if (typeof originalRender !== 'function' || typeof originalSelect !== 'function') return;
+  const pending = new Map();
+  function loadRegions(id) {
+    if (!pending.has(id)) {
+      const request = (async () => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 10000);
+        try {
+          const response = await fetch('/api/indicator_regions?ind_id=' + encodeURIComponent(id),
+            {signal: controller.signal, cache: 'no-store'});
+          if (!response.ok) throw new Error('HTTP ' + response.status);
+          const data = await response.json();
+          if (data.ind_id !== id || !Array.isArray(data.regions) || !data.regions.length ||
+              !data.regions.every(r => typeof r.value === 'string' && r.value.length &&
+                typeof r.label === 'string' && typeof r.available === 'boolean') ||
+              new Set(data.regions.map(r => r.value)).size !== data.regions.length) {
+            throw new Error('Invalid indicator_regions response');
+          }
+          return data.regions;
+        } finally { clearTimeout(timer); }
+      })();
+      pending.set(id, request);
+      // Share concurrent requests only; reopening reflects the current DB.
+      request.then(() => pending.delete(id), () => pending.delete(id));
+    }
+    return pending.get(id);
+  }
+  async function bindRegions(select) {
+    const id = select.id.slice(4);
+    const previous = select.value;
+    select.disabled = true;
+    select.replaceChildren(new Option('지역 불러오는 중…', ''));
+    try {
+      const regions = await loadRegions(id);
+      if (!select.isConnected) return;
+      const options = regions.map(region => {
+        const option = new Option(region.label + (region.available ? '' : ' (데이터 없음)'), region.value);
+        option.disabled = !region.available;
+        return option;
+      });
+      select.replaceChildren(...options);
+      const chosen = regions.find(r => r.available && r.value === previous) ||
+        regions.find(r => r.available && r.value === '전국') || regions.find(r => r.available);
+      if (chosen) select.value = chosen.value;
+      else select.selectedIndex = -1;
+      select.disabled = !chosen;
+      select.title = chosen ? '해당 지표의 데이터가 있는 지역만 선택할 수 있습니다.' : '이 지표의 지역 데이터가 없습니다.';
+    } catch (error) {
+      if (!select.isConnected) return;
+      select.replaceChildren(new Option('지역 조회 실패', ''));
+      select.disabled = true;
+      select.title = 'API를 확인한 뒤 탭 또는 모달을 다시 열어 주세요.';
+      console.warn('[indicator regions]', id, error);
+    }
+  }
+  window.renderIndTab = function(...args) {
+    const result = originalRender.apply(this, args);
+    document.querySelectorAll('#indicator-modal #ind-list-box select.ind-select-reg[id^="reg-"]')
+      .forEach(select => { void bindRegions(select); });
+    return result;
+  };
+  window.selectSubIndicator = function(id) {
+    const select = document.getElementById('reg-' + id);
+    if (select && (select.disabled || !select.value || !select.selectedOptions.length || select.selectedOptions[0].disabled)) {
+      alert('지역 데이터를 불러온 뒤, 데이터가 있는 지역을 선택해 주세요.');
+      return;
+    }
+    return originalSelect.apply(this, arguments);
+  };
+})();
+</script>
+<!-- END SAFE_INDICATOR_REGIONS_V1 -->
+
+</body>
+</html>

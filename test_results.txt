@@ -1,0 +1,20 @@
+test_backup_wal_and_statistics (__main__.SafetyTests.test_backup_wal_and_statistics) ...   DATA OK _db_sync_touch: 2 rows
+ok
+test_budget_failure_not_published (__main__.SafetyTests.test_budget_failure_not_published) ... ok
+test_cancelled_value_mutation_detected (__main__.SafetyTests.test_cancelled_value_mutation_detected) ... ok
+test_compact_and_serving_publish (__main__.SafetyTests.test_compact_and_serving_publish) ... ok
+test_existing_output_never_overwritten (__main__.SafetyTests.test_existing_output_never_overwritten) ... ok
+test_original_bug_is_not_a_false_pass (__main__.SafetyTests.test_original_bug_is_not_a_false_pass) ... /workspace/scratch/a037d9b5e013/deliverables/db_refactor/main_original.py:1707: SyntaxWarning: invalid escape sequence '\.'
+  const resizedFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".webp", {
+/workspace/scratch/a037d9b5e013/deliverables/db_refactor/main.py:1708: SyntaxWarning: invalid escape sequence '\.'
+  const resizedFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".webp", {
+ok
+test_unique_named_index_never_dropped (__main__.SafetyTests.test_unique_named_index_never_dropped) ... ok
+test_unknown_tables_fail_closed (__main__.SafetyTests.test_unknown_tables_fail_closed) ...   DATA OK apt_rents: 1 rows
+ok
+test_value_mutation_detected (__main__.SafetyTests.test_value_mutation_detected) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 46.034s
+
+OK

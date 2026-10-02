@@ -1,0 +1,528 @@
+{
+  "status": "INSPECTED",
+  "source": "C:\\Users\\백경훈\\OneDrive\\Desktop\\my-apt-project\\backup.db",
+  "output": "C:\\Users\\백경훈\\OneDrive\\Desktop\\my-apt-project\\inspection.db",
+  "kind": "optimize",
+  "profile": "compact",
+  "baseline": "C:\\Users\\백경훈\\OneDrive\\Desktop\\my-apt-project\\inspection.db.run\\baseline.db",
+  "before": {
+    "file_bytes": 493666304,
+    "logical_bytes": 493666304,
+    "page_size": 4096,
+    "page_count": 120524,
+    "freelist_bytes": 0,
+    "sqlite_version": "3.50.4",
+    "dbstat_available": false,
+    "dbstat_note": "no such table: dbstat",
+    "tables": {
+      "_db_sync_touch": {
+        "rows": 1,
+        "columns": [
+          [
+            0,
+            "id",
+            "INTEGER",
+            0,
+            null,
+            1,
+            0
+          ],
+          [
+            1,
+            "updated_at",
+            "TEXT",
+            0,
+            null,
+            0,
+            0
+          ]
+        ],
+        "indexes": []
+      },
+      "apt_cancelled_trades": {
+        "rows": 8609,
+        "columns": [
+          [
+            0,
+            "apt_name",
+            "TEXT",
+            0,
+            null,
+            1,
+            0
+          ],
+          [
+            1,
+            "deal_date",
+            "TEXT",
+            0,
+            null,
+            2,
+            0
+          ],
+          [
+            2,
+            "deal_amount",
+            "INTEGER",
+            0,
+            null,
+            3,
+            0
+          ],
+          [
+            3,
+            "exclu_use_ar",
+            "REAL",
+            0,
+            null,
+            4,
+            0
+          ],
+          [
+            4,
+            "floor",
+            "INTEGER",
+            0,
+            null,
+            5,
+            0
+          ]
+        ],
+        "indexes": [
+          [
+            0,
+            "sqlite_autoindex_apt_cancelled_trades_1",
+            1,
+            "pk",
+            0
+          ]
+        ]
+      },
+      "apt_meta_master": {
+        "rows": 21173,
+        "columns": [
+          [
+            0,
+            "apt_name",
+            "TEXT",
+            0,
+            null,
+            0,
+            0
+          ],
+          [
+            1,
+            "norm_name",
+            "TEXT",
+            0,
+            null,
+            0,
+            0
+          ],
+          [
+            2,
+            "built_year",
+            "INT",
+            0,
+            null,
+            0,
+            0
+          ],
+          [
+            3,
+            "built_str",
+            "TEXT",
+            0,
+            null,
+            0,
+            0
+          ],
+          [
+            4,
+            "units_str",
+            "TEXT",
+            0,
+            null,
+            0,
+            0
+          ],
+          [
+            5,
+            "units_84_str",
+            "TEXT",
+            0,
+            null,
+            0,
+            0
+          ],
+          [
+            6,
+            "units_59_str",
+            "TEXT",
+            0,
+            null,
+            0,
+            0
+          ],
+          [
+            7,
+            "type_info",
+            "TEXT",
+            0,
+            null,
+            0,
+            0
+          ]
+        ],
+        "indexes": [
+          [
+            0,
+            "idx_meta_norm",
+            0,
+            "c",
+            0
+          ]
+        ]
+      },
+      "apt_rank_yearly_summary": {
+        "rows": 150007,
+        "columns": [
+          [
+            0,
+            "deal_year",
+            "INT",
+            0,
+            null,
+            0,
+            0
+          ],
+          [
+            1,
+            "apt_name",
+            "TEXT",
+            0,
+            null,
+            0,
+            0
+          ],
+          [
+            2,
+            "lawd_5",
+            "",
+            0,
+            null,
+            0,
+            0
+          ],
+          [
+            3,
+            "total_trade_cnt",
+            "",
+            0,
+            null,
+            0,
+            0
+          ],
+          [
+            4,
+            "trade_cnt_84",
+            "",
+            0,
+            null,
+            0,
+            0
+          ],
+          [
+            5,
+            "trade_cnt_59",
+            "",
+            0,
+            null,
+            0,
+            0
+          ],
+          [
+            6,
+            "max_price",
+            "",
+            0,
+            null,
+            0,
+            0
+          ],
+          [
+            7,
+            "avg_price",
+            "",
+            0,
+            null,
+            0,
+            0
+          ],
+          [
+            8,
+            "max_pyeong",
+            "",
+            0,
+            null,
+            0,
+            0
+          ],
+          [
+            9,
+            "avg_pyeong",
+            "",
+            0,
+            null,
+            0,
+            0
+          ],
+          [
+            10,
+            "max_84_price",
+            "",
+            0,
+            null,
+            0,
+            0
+          ],
+          [
+            11,
+            "avg_84_price",
+            "",
+            0,
+            null,
+            0,
+            0
+          ],
+          [
+            12,
+            "max_59_price",
+            "",
+            0,
+            null,
+            0,
+            0
+          ],
+          [
+            13,
+            "avg_59_price",
+            "",
+            0,
+            null,
+            0,
+            0
+          ],
+          [
+            14,
+            "max_p_date",
+            "TEXT",
+            0,
+            null,
+            0,
+            0
+          ],
+          [
+            15,
+            "max_p_area",
+            "",
+            0,
+            null,
+            0,
+            0
+          ],
+          [
+            16,
+            "max_p_pyeong_est",
+            "",
+            0,
+            null,
+            0,
+            0
+          ],
+          [
+            17,
+            "max_p_floor",
+            "",
+            0,
+            null,
+            0,
+            0
+          ],
+          [
+            18,
+            "dispersion_cv",
+            "",
+            0,
+            null,
+            0,
+            0
+          ]
+        ],
+        "indexes": [
+          [
+            0,
+            "idx_rank_lookup",
+            0,
+            "c",
+            0
+          ]
+        ]
+      },
+      "apt_trades": {
+        "rows": 2716841,
+        "columns": [
+          [
+            0,
+            "apt_name",
+            "TEXT",
+            0,
+            null,
+            0,
+            0
+          ],
+          [
+            1,
+            "lawd_cd",
+            "TEXT",
+            0,
+            null,
+            0,
+            0
+          ],
+          [
+            2,
+            "deal_date",
+            "TEXT",
+            0,
+            null,
+            0,
+            0
+          ],
+          [
+            3,
+            "deal_amount",
+            "INTEGER",
+            0,
+            null,
+            0,
+            0
+          ],
+          [
+            4,
+            "exclu_use_ar",
+            "REAL",
+            0,
+            null,
+            0,
+            0
+          ],
+          [
+            5,
+            "floor",
+            "INTEGER",
+            0,
+            null,
+            0,
+            0
+          ],
+          [
+            6,
+            "deal_type",
+            "TEXT",
+            0,
+            "'중개거래'",
+            0,
+            0
+          ],
+          [
+            7,
+            "estate_agent_sgg_nm",
+            "TEXT",
+            0,
+            null,
+            0,
+            0
+          ]
+        ],
+        "indexes": [
+          [
+            0,
+            "idx_apt_trades_agent",
+            0,
+            "c",
+            0
+          ],
+          [
+            1,
+            "idx_apt_trades_deal_type",
+            0,
+            "c",
+            0
+          ],
+          [
+            2,
+            "idx_trades_lookup",
+            0,
+            "c",
+            0
+          ],
+          [
+            3,
+            "idx_trade_name",
+            0,
+            "c",
+            0
+          ]
+        ]
+      }
+    },
+    "storage_types": {
+      "deal_amount": [
+        [
+          "integer",
+          2716841
+        ]
+      ],
+      "exclu_use_ar": [
+        [
+          "real",
+          2716841
+        ]
+      ],
+      "floor": [
+        [
+          "integer",
+          2716841
+        ]
+      ],
+      "deal_date": [
+        [
+          "text",
+          2716841
+        ]
+      ]
+    },
+    "deal_type_counts": [
+      [
+        "중개거래",
+        "text",
+        2708118
+      ],
+      [
+        "직거래",
+        "text",
+        8723
+      ]
+    ],
+    "apt_name_whitespace_rows": 0
+  },
+  "capacity_estimate": {
+    "freelist_bytes": 0,
+    "candidate_index_bytes": null,
+    "formula": "freelist + measured removable index pages + reclaimable slack; final size must be measured",
+    "no_fixed_reduction_guarantee": true,
+    "estimated_MB_before_slack_repack": null,
+    "user_table_payload_lower_bound_MB": null
+  }
+}

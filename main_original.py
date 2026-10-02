@@ -5,9 +5,7 @@ from functools import lru_cache
 from datetime import datetime
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, Query, Request
-from html import escape
-import logging
+from fastapi import FastAPI, Query
 from fastapi.responses import HTMLResponse
 import uvicorn
 
@@ -248,7 +246,6 @@ def get_rankings(year: int = Query(2026), rank_type: str = Query("price_max"), r
         SELECT 
             s.apt_name, s.lawd_5, s.total_trade_cnt, s.trade_cnt_84, s.trade_cnt_59,
             COALESCE(s.max_price, 0) as max_price, COALESCE(s.avg_price, 0) as avg_price,
-            COALESCE(s.avg_pyeong, 0) as avg_pyeong,
             COALESCE(s.max_84_price, 0) as max_84_price, COALESCE(s.avg_84_price, 0) as avg_84_price,
             COALESCE(s.max_59_price, 0) as max_59_price, COALESCE(s.avg_59_price, 0) as avg_59_price,
             s.max_p_date, s.max_p_area, s.max_p_pyeong_est, s.max_p_floor, COALESCE(s.dispersion_cv, 0) as dispersion_cv,
@@ -286,166 +283,6 @@ def get_rankings(year: int = Query(2026), rank_type: str = Query("price_max"), r
             "built_str": r['built_str'], "units_str": r['units_str'], "type_info": r['type_info']
         })
     return results
-
-
-# 배포 전 Supabase SQL Editor에서 한 번 실행 (기존 행 삭제 없음):
-# ALTER TABLE public.posts ADD COLUMN IF NOT EXISTS category text
-#   NOT NULL DEFAULT 'real_estate'
-#   CHECK (category IN ('real_estate', 'stock_macro', 'personal_finance'));
-# SSR은 공개 키와 기존 익명 SELECT 권한만 사용합니다.
-# 비공개 글을 노출하는 service_role 키를 사용하지 마세요.
-# 선택 환경변수 SITE_URL=https://실제도메인 (canonical/OG URL 고정)
-INSIGHT_CATEGORIES = {
-    "real_estate": "🏢 부동산 분석",
-    "stock_macro": "📈 주식·매크로",
-    "personal_finance": "💡 생활금융",
-}
-INSIGHT_CSS = '\n    .insight-filters {display:flex;gap:8px;flex-wrap:wrap;margin:20px 0 28px}\n    .insight-filter {border:1px solid #cbd5e1;border-radius:24px;padding:10px 18px;background:white;color:#475569;cursor:pointer;text-decoration:none;font:inherit}\n    .insight-filter.active {background:#0f172a;color:white;border-color:#0f172a}\n    .insight-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px}\n    .insight-card {border:1px solid #e2e8f0;border-radius:18px;overflow:hidden;background:white;transition:transform .2s,box-shadow .2s;min-width:0}\n    .insight-card:hover {transform:translateY(-4px);box-shadow:0 12px 30px #0f172a12}\n    .insight-card a {display:block;color:inherit;text-decoration:none}\n    .insight-card a:focus-visible {outline:3px solid #2563eb;outline-offset:-3px}\n    .insight-cover {aspect-ratio:16/9;background:linear-gradient(135deg,#dbeafe,#eff6ff);display:grid;place-items:center;overflow:hidden;font-size:44px;color:#334155}\n    .insight-cover[data-category="stock_macro"] {background:linear-gradient(135deg,#d1fae5,#ecfdf5)}\n    .insight-cover[data-category="personal_finance"] {background:linear-gradient(135deg,#fef3c7,#fffbeb)}\n    .insight-cover img {width:100%;height:100%;object-fit:cover;grid-area:1/1}\n    .insight-card-body {padding:22px}\n    .insight-badge {display:inline-block;font-size:12px;font-weight:700;color:#0369a1;background:#f0f9ff;border-radius:6px;padding:5px 9px}\n    .insight-card h2 {font-size:20px;line-height:1.5;margin:12px 0 8px;overflow-wrap:anywhere}\n    .insight-excerpt {color:#64748b;font-size:14px;line-height:1.7;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:3.4em;margin:0 0 22px;overflow-wrap:anywhere}\n    .insight-meta {display:flex;justify-content:space-between;gap:12px;color:#64748b;font-size:12px}\n    .insight-status {grid-column:1/-1;padding:48px;text-align:center;color:#64748b}\n    .insight-quick {margin:0 22px 20px;border:0;background:none;color:#0369a1;cursor:pointer;padding:0}\n    @media(max-width:1000px){.insight-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}\n    @media(max-width:620px){.insight-grid{grid-template-columns:1fr}.board-header{flex-wrap:wrap;gap:12px}}\n'
-
-
-def insight_public_posts(params):
-    """Public read only: the same RLS visibility as a logged-out visitor."""
-    query = {"select": "*", "board_type": "eq.insight", **params}
-    req = urllib.request.Request(
-        f"{SUPABASE_URL}/rest/v1/posts?{urllib.parse.urlencode(query)}",
-        headers={"apikey": SUPABASE_KEY, "Accept": "application/json"},
-    )
-    with urllib.request.urlopen(req, timeout=8) as response:
-        posts = json.loads(response.read().decode("utf-8"))
-    if not isinstance(posts, list):
-        raise ValueError("Unexpected posts response")
-    return posts
-
-
-def insight_category(post):
-    category = post.get("category")
-    return category if category in INSIGHT_CATEGORIES else "real_estate"
-
-
-def insight_images(post):
-    urls = post.get("image_urls")
-    if not isinstance(urls, list):
-        return []
-    valid = []
-    for value in urls:
-        if not isinstance(value, str):
-            continue
-        try:
-            parsed = urllib.parse.urlsplit(value)
-            if parsed.scheme in ("https", "http") and parsed.netloc:
-                valid.append(value)
-        except ValueError:
-            pass
-    return valid
-
-
-def insight_document(request, title, description, body, path, metadata="", status=200):
-    base = os.environ.get("SITE_URL", "").strip().rstrip("/") or str(request.base_url).rstrip("/")
-    url = escape(base + path, quote=True)
-    robots = '<meta name="robots" content="noindex">' if status != 200 else ''
-    html = f'''<!doctype html><html lang="ko"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{escape(title)} | TECH REALTY INSIGHT</title>
-<meta name="description" content="{escape(description, quote=True)}">
-<link rel="canonical" href="{url}"><meta property="og:url" content="{url}">
-<meta property="og:title" content="{escape(title, quote=True)}">
-<meta property="og:description" content="{escape(description, quote=True)}">
-<meta property="og:locale" content="ko_KR">{robots}{metadata}
-<style>{INSIGHT_CSS}
-*{{box-sizing:border-box}}body{{margin:0;background:#f8fafc;color:#0f172a;font-family:system-ui,sans-serif}}
-main{{max-width:1160px;margin:auto;padding:40px 22px 80px}}header{{border-bottom:1px solid #e2e8f0;padding:20px 24px;background:white}}
-a{{color:#0369a1}}header a{{text-decoration:none;font-weight:800}}h1{{font-size:clamp(28px,5vw,42px);line-height:1.4;overflow-wrap:anywhere}}
-.insight-article{{max-width:800px;margin:auto;background:white;padding:clamp(20px,4vw,48px);border-radius:18px}}
-.article-content{{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.95;font-size:17px;margin:32px 0}}
-.article-images img{{display:block;max-width:100%;height:auto;margin:24px auto;border-radius:12px}}
-.article-meta{{color:#64748b;font-size:14px;display:flex;gap:16px;flex-wrap:wrap}}
-footer{{margin-top:40px;color:#64748b;font-size:13px}}</style></head>
-<body><header><a href="/">TECH REALTY INSIGHT</a></header><main>{body}
-<footer><a href="/insight">투자 인사이트 목록</a> · <a href="/#insight">대시보드로 돌아가기</a></footer></main></body></html>'''
-    return HTMLResponse(html, status_code=status)
-
-
-def insight_unavailable(request):
-    logging.getLogger(__name__).warning("Public insight data could not be loaded")
-    response = insight_document(request, "잠시 후 다시 시도해 주세요", "게시글을 불러올 수 없습니다.",
-        '<h1>게시글을 불러올 수 없습니다.</h1><p>잠시 후 다시 접속해 주세요.</p>', request.url.path, status=503)
-    response.headers["Retry-After"] = "60"
-    return response
-
-
-@app.get("/insight", response_class=HTMLResponse)
-def insight_index(request: Request, category: str = "all", page: int = Query(1, ge=1)):
-    if category not in INSIGHT_CATEGORIES and category != "all":
-        return insight_document(request, "분류를 찾을 수 없습니다", "", '<h1>분류를 찾을 수 없습니다.</h1>', '/insight', status=404)
-    params = {"order": "created_at.desc,id.desc", "limit": "25", "offset": str((page - 1) * 24)}
-    if category == "real_estate":
-        params["or"] = "(category.eq.real_estate,category.is.null)"
-    elif category != "all":
-        params["category"] = f"eq.{category}"
-    try:
-        posts = insight_public_posts(params)
-    except Exception:
-        return insight_unavailable(request)
-    filters = ''.join(f'<a class="insight-filter{ " active" if key == category else ""}" href="/insight?category={key}">{label}</a>'
-        for key, label in {"all": "전체", **INSIGHT_CATEGORIES}.items())
-    cards = []
-    for post in posts[:24]:
-        cat = insight_category(post)
-        label = INSIGHT_CATEGORIES[cat]
-        title = escape(str(post.get("title") or "제목 없음"))
-        images = insight_images(post)
-        cover = f'<img src="{escape(images[0], quote=True)}" alt="{title}" loading="lazy">' if images else label.split()[0]
-        href = '/insight/' + urllib.parse.quote(str(post["id"]), safe='')
-        summary = escape(' '.join(str(post.get("content") or '').split())[:240])
-        date = escape(str(post.get("created_at") or '')[:10])
-        views = escape(str(post.get("views") or 0))
-        cards.append(f'<article class="insight-card"><a href="{href}"><div class="insight-cover" data-category="{cat}">{cover}</div><div class="insight-card-body"><span class="insight-badge">{label}</span><h2>{title}</h2><p class="insight-excerpt">{summary}</p><div class="insight-meta"><time>{date}</time><span>조회 {views}</span></div></div></a></article>')
-    paging = ''
-    if page > 1:
-        paging += f'<a href="/insight?category={category}&amp;page={page-1}">← 이전</a> '
-    if len(posts) > 24:
-        paging += f'<a href="/insight?category={category}&amp;page={page+1}">다음 →</a>'
-    body = '<h1>투자 인사이트</h1><p>데이터로 읽는 시장, 일상에 도움이 되는 금융 이야기.</p>'
-    body += f'<nav class="insight-filters" aria-label="카테고리">{filters}</nav><div class="insight-grid">' + (''.join(cards) or '<p>등록된 글이 없습니다.</p>') + f'</div><nav style="margin-top:28px" aria-label="페이지">{paging}</nav>'
-    path = '/insight' + ('?' + urllib.parse.urlencode({"category": category, "page": page}) if category != 'all' or page != 1 else '')
-    return insight_document(request, '투자 인사이트', '부동산 분석, 주식·매크로, 생활금융 칼럼을 만나보세요.', body, path)
-
-
-@app.get("/insight/{post_id}", response_class=HTMLResponse)
-def insight_post(request: Request, post_id: str):
-    # Supports existing integer IDs and UUID IDs without embedding arbitrary PostgREST syntax.
-    if not re.fullmatch(r"(?:[0-9]{1,20}|[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})", post_id):
-        return insight_document(request, "글을 찾을 수 없습니다", "", '<h1>글을 찾을 수 없습니다.</h1>', request.url.path, status=404)
-    try:
-        posts = insight_public_posts({"id": f"eq.{post_id}", "limit": "1"})
-    except Exception:
-        return insight_unavailable(request)
-    if not posts:
-        return insight_document(request, "글을 찾을 수 없습니다", "", '<h1>글을 찾을 수 없습니다.</h1>', request.url.path, status=404)
-    post = posts[0]
-    title = str(post.get("title") or "제목 없음")
-    content = str(post.get("content") or "")
-    description = ' '.join(content.split())[:160]
-    category = INSIGHT_CATEGORIES[insight_category(post)]
-    date = str(post.get("created_at") or '')
-    author = str(post.get("nickname") or '운영자')
-    images = insight_images(post)
-    figures = ''.join(f'<img src="{escape(url, quote=True)}" alt="{escape(title, quote=True)} — 첨부 이미지 {i+1}" loading="lazy">' for i, url in enumerate(images))
-    body = f'<article class="insight-article"><span class="insight-badge">{category}</span><h1>{escape(title)}</h1><div class="article-meta"><span>{escape(author)}</span><time datetime="{escape(date, quote=True)}">{escape(date[:10])}</time><span>조회 {escape(str(post.get("views") or 0))}</span></div><div class="article-content">{escape(content)}</div><div class="article-images">{figures}</div></article>'
-    metadata = '<meta property="og:type" content="article">'
-    if images:
-        metadata += f'<meta property="og:image" content="{escape(images[0], quote=True)}">'
-    if date:
-        metadata += f'<meta property="article:published_time" content="{escape(date, quote=True)}">'
-    structured = {"@context": "https://schema.org", "@type": "BlogPosting", "headline": title,
-                  "description": description, "articleSection": category, "author": {"@type": "Person", "name": author}}
-    if date:
-        structured["datePublished"] = date
-    if images:
-        structured["image"] = images
-    # Escape '<' to prevent a stored </script> from breaking out of JSON-LD.
-    metadata += '<script type="application/ld+json">' + json.dumps(structured, ensure_ascii=True).replace('<', '\\u003c') + '</script>'
-    return insight_document(request, title, description, body, '/insight/' + post_id, metadata)
 
 UI_HTML = """
 <!DOCTYPE html>
@@ -635,28 +472,6 @@ UI_HTML = """
     .story-card-content { font-size:14px; line-height:1.6; color:#334155; white-space:pre-wrap; }
     .story-card-photos { display:flex; gap:8px; margin-top:10px; overflow-x:auto; }
     .story-card-photo { width:90px; height:90px; border-radius:8px; object-fit:cover; border:1px solid #e2e8f0; }
-
-    .insight-filters {display:flex;gap:8px;flex-wrap:wrap;margin:20px 0 28px}
-    .insight-filter {border:1px solid #cbd5e1;border-radius:24px;padding:10px 18px;background:white;color:#475569;cursor:pointer;text-decoration:none;font:inherit}
-    .insight-filter.active {background:#0f172a;color:white;border-color:#0f172a}
-    .insight-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px}
-    .insight-card {border:1px solid #e2e8f0;border-radius:18px;overflow:hidden;background:white;transition:transform .2s,box-shadow .2s;min-width:0}
-    .insight-card:hover {transform:translateY(-4px);box-shadow:0 12px 30px #0f172a12}
-    .insight-card a {display:block;color:inherit;text-decoration:none}
-    .insight-card a:focus-visible {outline:3px solid #2563eb;outline-offset:-3px}
-    .insight-cover {aspect-ratio:16/9;background:linear-gradient(135deg,#dbeafe,#eff6ff);display:grid;place-items:center;overflow:hidden;font-size:44px;color:#334155}
-    .insight-cover[data-category="stock_macro"] {background:linear-gradient(135deg,#d1fae5,#ecfdf5)}
-    .insight-cover[data-category="personal_finance"] {background:linear-gradient(135deg,#fef3c7,#fffbeb)}
-    .insight-cover img {width:100%;height:100%;object-fit:cover;grid-area:1/1}
-    .insight-card-body {padding:22px}
-    .insight-badge {display:inline-block;font-size:12px;font-weight:700;color:#0369a1;background:#f0f9ff;border-radius:6px;padding:5px 9px}
-    .insight-card h2 {font-size:20px;line-height:1.5;margin:12px 0 8px;overflow-wrap:anywhere}
-    .insight-excerpt {color:#64748b;font-size:14px;line-height:1.7;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:3.4em;margin:0 0 22px;overflow-wrap:anywhere}
-    .insight-meta {display:flex;justify-content:space-between;gap:12px;color:#64748b;font-size:12px}
-    .insight-status {grid-column:1/-1;padding:48px;text-align:center;color:#64748b}
-    .insight-quick {margin:0 22px 20px;border:0;background:none;color:#0369a1;cursor:pointer;padding:0}
-    @media(max-width:1000px){.insight-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-    @media(max-width:620px){.insight-grid{grid-template-columns:1fr}.board-header{flex-wrap:wrap;gap:12px}}
   </style>
 </head>
 <body>
@@ -713,15 +528,6 @@ UI_HTML = """
       <button onclick="closeWriteModal()" style="background: none; border: none; font-size: 18px; cursor: pointer; color: #94a3b8;">✕</button>
     </div>
     <form id="postWriteForm">
-      <div class="form-group" id="insightCategoryGroup" style="display:none">
-        <label class="form-label" for="postCategorySelect">카테고리</label>
-        <select id="postCategorySelect" class="form-control">
-          <option value="real_estate">🏢 부동산 분석</option>
-          <option value="stock_macro">📈 주식·매크로</option>
-          <option value="personal_finance">💡 생활금융</option>
-        </select>
-        <small>첫 번째 첨부 사진이 대표 썸네일로 표시됩니다.</small>
-      </div>
       <div class="form-group" id="regionSelectGroup">
         <label class="form-label">지역 선택</label>
         <select id="postRegionSelect" class="form-control" style="background: white;">
@@ -859,20 +665,7 @@ UI_HTML = """
               <tr id="rankTableHeaderRow">
                 <th>순위</th><th>단지명</th><th>지역</th><th style="color: #2563eb;" id="rankMetricHeader">기준 지표</th>
                 <th>입주 연식</th><th>세대수</th><th>연간 거래량</th>
-                <th>
-                  <span>가격 분산도</span>
-                  <span class="help-tooltip-trigger">?
-                    <div class="help-tooltip-box" style="width: 360px;">
-                      <div class="tooltip-title">💡 가격 분산도(Price Dispersion)란?</div>
-                      <div class="tooltip-def">실거래가의 통계적 변동계수(표준편차/평균)로 시장의 <strong>가격 합의 수준</strong>을 나타냅니다.</div>
-                      <div style="font-size: 12px; line-height: 1.6; color: #cbd5e1; text-align: left;">
-                        <div style="margin-bottom: 6px;"><strong style="color: #38bdf8;">• 균질한 상품성 & 가격 합의:</strong> 동·호수별 편차가 적고 적정 시세에 대한 시장 공감대가 두터워 왜곡이 적습니다.</div>
-                        <div style="margin-bottom: 6px;"><strong style="color: #38bdf8;">• 바가지 · 저가 매도 위험 제거:</strong> 상투 매수나 헐값 매각 위험이 없어 탐색 비용과 의사결정 피로도가 대폭 줄어듭니다.</div>
-                        <div><strong style="color: #38bdf8;">• 우수한 환금성:</strong> 시세 예측 가능성이 높아 거래 체결이 매끄럽고 매수 대기층이 탄탄합니다.</div>
-                      </div>
-                    </div>
-                  </span>
-                </th>
+                <th><span>가격 분산도</span><span class="help-tooltip-trigger">?<div class="help-tooltip-box"><div class="tooltip-title">💡 가격 분산도(Price Dispersion)란?</div><div class="tooltip-def">해당 연도 실거래 평당가의 <strong>변동계수(CV% = 표준편차/평균가)</strong>입니다.</div></div></span></th>
               </tr>
             </thead>
             <tbody id="rankTableBody"><tr><td colspan="8" style="padding: 30px; color: #94a3b8;">데이터를 불러오는 중입니다...</td></tr></tbody>
@@ -952,19 +745,14 @@ UI_HTML = """
     <div class="page-view" id="page-insight">
       <div class="board-container">
         <div class="board-header">
-          <div class="board-title-text">✍️ 투자 인사이트 <span style="font-size: 13px; color: #64748b; font-weight: 500;">(운영자 분석 칼럼 공간)</span></div>
+          <div class="board-title-text">✍️ 부동산 투자 인사이트 <span style="font-size: 13px; color: #64748b; font-weight: 500;">(운영자 분석 칼럼 공간)</span></div>
           <button class="btn-write-post" onclick="openWriteModal('insight')">✏️ 인사이트 작성</button>
         </div>
         <div id="insightListView">
-          <p style="color:#64748b">데이터로 읽는 시장, 일상에 도움이 되는 금융 이야기.</p>
-          <div class="insight-filters" id="insightFilters" aria-label="인사이트 카테고리">
-            <button class="insight-filter active" aria-pressed="true" onclick="filterInsights('all',this)">전체</button>
-            <button class="insight-filter" aria-pressed="false" onclick="filterInsights('real_estate',this)">부동산</button>
-            <button class="insight-filter" aria-pressed="false" onclick="filterInsights('stock_macro',this)">주식</button>
-            <button class="insight-filter" aria-pressed="false" onclick="filterInsights('personal_finance',this)">생활금융</button>
-          </div>
-          <div id="insightGrid" class="insight-grid" aria-live="polite"></div>
-          <p><a href="/insight">인사이트 전체 글 · 고유 주소 목록 →</a></p>
+          <table class="board-table">
+            <thead><tr><th style="width: 70px;">번호</th><th>제목</th><th style="width: 130px;">작성자</th><th style="width: 110px;">작성일</th><th style="width: 70px;">조회</th></tr></thead>
+            <tbody id="insightTableBody"><tr><td colspan="5" style="padding: 30px; color: #94a3b8;">글을 불러오는 중입니다...</td></tr></tbody>
+          </table>
         </div>
         <div id="insightDetailView" class="post-detail-box"></div>
       </div>
@@ -1362,20 +1150,7 @@ UI_HTML = """
     results.forEach(r => html += `<td style="font-weight:600;">${r.data.stats?.avg_price || '-'}</td>`);
     html += '</tr><tr><th class="metric-col" style="color:#0284c7;"><span>└ 최근 이평시세</span></th>';
     results.forEach(r => html += `<td style="font-weight:700; color:#0284c7;">${r.data.stats?.latest_ma || '-'}</td>`);
-    html += '</tr><tr><th class="metric-col" style="background:#f8fafc;">' +
-      '<span>6. 가격 분산도</span>' +
-      '<span class="help-tooltip-trigger">?' +
-        '<div class="help-tooltip-box" style="left: 0; right: auto; width: 360px;">' +
-          '<div class="tooltip-title">💡 가격 분산도(Price Dispersion)란?</div>' +
-          '<div class="tooltip-def">실거래가의 통계적 변동계수(표준편차/평균)로 시장의 <strong>가격 합의 수준</strong>을 나타냅니다.</div>' +
-          '<div style="font-size: 12px; line-height: 1.6; color: #cbd5e1;">' +
-            '<div style="margin-bottom: 6px;"><strong style="color: #38bdf8;">• 균질한 상품성 & 가격 합의:</strong> 동·호수별 편차가 적고 적정 시세에 대한 시장 공감대가 두터워 왜곡이 적습니다.</div>' +
-            '<div style="margin-bottom: 6px;"><strong style="color: #38bdf8;">• 바가지 · 저가 매도 위험 제거:</strong> 상투 매수나 헐값 매각 위험이 없어 탐색 비용과 의사결정 피로도가 대폭 줄어듭니다.</div>' +
-            '<div><strong style="color: #38bdf8;">• 우수한 환금성:</strong> 시세 예측 가능성이 높아 거래 체결이 매끄럽고 매수 대기층이 탄탄합니다.</div>' +
-          '</div>' +
-        '</div>' +
-      '</span>' +
-    '</th>';
+    html += '</tr><tr><th class="metric-col" style="background:#f8fafc;"><span>6. 가격 분산도</span></th>';
     results.forEach(r => html += `<td style="font-weight:700; color:#0f172a;">${r.data.stats?.dispersion || '-'}</td>`);
     html += '</tr></tbody></table>';
     wrapper.innerHTML = html;
@@ -1756,53 +1531,7 @@ UI_HTML = """
     loadPosts('region');
   }
 
-  const insightCategories = {real_estate:'🏢 부동산 분석',stock_macro:'📈 주식·매크로',personal_finance:'💡 생활금융'};
-  let insightCategory = 'all';
-  let insightLoadSequence = 0;
-  function insightEscape(value) {
-    return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  }
-  function insightImage(value) {
-    try { const u = new URL(value); return ['https:','http:'].includes(u.protocol) ? u.href : ''; } catch { return ''; }
-  }
-  function filterInsights(category, button) {
-    insightCategory = category;
-    document.querySelectorAll('#insightFilters button').forEach(b => {
-      b.classList.toggle('active', b === button); b.setAttribute('aria-pressed', String(b === button));
-    });
-    loadPosts('insight');
-  }
-  async function loadInsightCards() {
-    const sequence = ++insightLoadSequence;
-    const category = insightCategory;
-    const grid = document.getElementById('insightGrid');
-    document.getElementById('insightDetailView').style.display = 'none';
-    document.getElementById('insightListView').style.display = 'block';
-    grid.innerHTML = '<p class="insight-status">글을 불러오는 중입니다…</p>';
-    try {
-      const {data, error} = await supabaseClient.from('posts').select('*').eq('board_type','insight').order('created_at',{ascending:false});
-      if (sequence !== insightLoadSequence) return;
-      if (error) throw error;
-      const posts = (data || []).filter(p => category === 'all' || (p.category || 'real_estate') === category);
-      grid.innerHTML = posts.length ? posts.map(p => {
-        const cat = Object.hasOwn(insightCategories,p.category) ? p.category : 'real_estate';
-        const label = insightCategories[cat];
-        const img = insightImage(Array.isArray(p.image_urls) ? p.image_urls[0] : '');
-        const id = encodeURIComponent(String(p.id));
-        return `<article class="insight-card"><a href="/insight/${id}">
-          <div class="insight-cover" data-category="${cat}">${img ? `<img src="${insightEscape(img)}" alt="${insightEscape(p.title)}" loading="lazy" onerror="this.replaceWith(document.createTextNode('📖'))">` : label.split(' ')[0]}</div>
-          <div class="insight-card-body"><span class="insight-badge">${label}</span>
-          <h2>${insightEscape(p.title)}</h2><p class="insight-excerpt">${insightEscape(p.content)}</p>
-          <div class="insight-meta"><time>${insightEscape((p.created_at || '').slice(0,10))}</time><span>조회 ${Number(p.views) || 0}</span></div></div></a>
-          <button class="insight-quick" data-post-id="${insightEscape(p.id)}">빠른 보기 · 댓글</button></article>`;
-      }).join('') : '<p class="insight-status">등록된 글이 없습니다.</p>';
-      grid.querySelectorAll('.insight-quick').forEach(b => b.addEventListener('click', () => viewPostDetail(b.dataset.postId,'insight')));
-    } catch (err) {
-      if (sequence === insightLoadSequence) grid.innerHTML = '<p class="insight-status">글을 불러오지 못했습니다. 카테고리를 눌러 다시 시도해 주세요.</p>';
-    }
-  }
   async function loadPosts(boardType) {
-    if (boardType === 'insight') { currentBoardType = boardType; return loadInsightCards(); }
     currentBoardType = boardType;
     const isInsight = (boardType === 'insight');
     const tbody = document.getElementById(isInsight ? 'insightTableBody' : 'boardTableBody');
@@ -1866,21 +1595,20 @@ UI_HTML = """
       let imgHtml = '';
       if (post.image_urls && post.image_urls.length > 0) {
         post.image_urls.forEach(url => {
-          imgHtml += `<img src="${insightEscape(insightImage(url))}" loading="lazy">`;
+          imgHtml += `<img src="${url}" loading="lazy">`;
         });
       }
 
       const dateStr = post.created_at ? post.created_at.substring(0, 16).replace('T', ' ') : '-';
       detailBox.innerHTML = `
         <button onclick="backToList('${boardType}')" style="margin-bottom: 16px; padding: 6px 12px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; cursor: pointer; font-size: 13px;">← 목록으로 돌아가기</button>
-        ${isInsight ? `<p><a href="/insight/${encodeURIComponent(String(post.id))}">이 글의 고유 주소로 열기 ↗</a></p>` : ''}
-        <div class="post-detail-title">${post.region ? `[${insightEscape(post.region)}] ` : ''}${insightEscape(post.title)}</div>
+        <div class="post-detail-title">${post.region ? `[${post.region}] ` : ''}${post.title}</div>
         <div class="post-detail-meta">
-          <span>작성자: <strong>${insightEscape(post.nickname)}</strong></span>
+          <span>작성자: <strong>${post.nickname}</strong></span>
           <span>등록일: ${dateStr}</span>
           <span>조회수: ${(post.views || 0) + 1}</span>
         </div>
-        <div class="post-detail-content">${insightEscape(post.content)}</div>
+        <div class="post-detail-content">${post.content}</div>
         <div class="post-detail-images">${imgHtml}</div>
 
         <div class="comments-section">
@@ -2018,8 +1746,6 @@ UI_HTML = """
 
     currentBoardType = boardType;
     currentTargetApt = targetApt;
-    document.getElementById('insightCategoryGroup').style.display = boardType === 'insight' ? 'block' : 'none';
-    document.getElementById('postCategorySelect').value = 'real_estate';
 
     if (boardType === 'apt') {
       document.getElementById('writeModalTitle').innerText = `🏢 ${targetApt} 이야기 등록`;
@@ -2075,7 +1801,6 @@ UI_HTML = """
 
       const { error: insertErr } = await supabaseClient.from('posts').insert({
         board_type: currentBoardType,
-        ...(currentBoardType === 'insight' ? {category: document.getElementById('postCategorySelect').value} : {}),
         region: region,
         apt_name: aptName,
         title: title,
@@ -2106,7 +1831,7 @@ UI_HTML = """
   window.onload = () => {
     checkAuthSession();
     buildYearButtons();
-    navigateTo(location.hash === '#insight' ? 'insight' : 'home');
+    navigateTo('home');
   };
 </script>
 </body>
