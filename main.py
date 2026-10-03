@@ -714,7 +714,16 @@ UI_HTML = """
     @media(max-width:620px){.insight-grid{grid-template-columns:1fr}.board-header{flex-wrap:wrap;gap:12px}}
   </style>
 <style>
-#insightQuillEditor .ql-editor img {max-width:100%;height:auto;cursor:pointer;pointer-events:auto;}
+#insightQuillEditor .ql-editor img {
+      cursor: pointer;
+      display: inline-block;
+      vertical-align: middle;
+      max-width: 100%;
+      user-select: all;
+      -webkit-user-drag: auto;
+    }
+    /* old */
+    .temp-old-img {max-width:100%;height:auto;cursor:pointer;pointer-events:auto;}
 #quillImageResizerBox {position:absolute;display:none;border:2px solid #2563eb;pointer-events:none;z-index:10000;box-sizing:border-box;}
 #quillImageResizerBox button {position:absolute;width:14px;height:14px;padding:0;background:#2563eb;border:2px solid white;border-radius:2px;pointer-events:auto;touch-action:none;}
 #quillImageResizerBox [data-dir="nw"] {top:-7px;left:-7px;cursor:nwse-resize;}
@@ -1856,6 +1865,7 @@ UI_HTML = """
     `;
     tbEl.appendChild(btnGroup);
     setupImageResizerEngine();
+    trackQuillSelection();
 
     document.getElementById('btnUploadOriginal').onclick = () => selectAndUpload(false);
     document.getElementById('btnUploadMobile').onclick = () => selectAndUpload(true);
