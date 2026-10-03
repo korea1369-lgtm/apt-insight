@@ -326,6 +326,70 @@ def insight_images(post):
             pass
     return valid
 
+from html.parser import HTMLParser
+
+
+class InsightHTML(HTMLParser):
+    """Allow Quill markup while excluding executable tags/attributes."""
+    tags = set('p br strong b em i u s strike blockquote pre code h1 h2 h3 h4 h5 h6 ol ul li span div a img sub sup'.split())
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.parts = []
+        self.images = set()
+
+    def handle_starttag(self, tag, attrs):
+        if tag not in self.tags:
+            return
+        clean = []
+        for key, value in attrs:
+            value = value or ''
+            if key in ('src', 'href') and ((tag == 'img' and key == 'src') or (tag == 'a' and key == 'href')):
+                try:
+                    parsed = urllib.parse.urlsplit(value.strip())
+                except ValueError:
+                    continue
+                if parsed.scheme not in ('http', 'https') or not parsed.netloc:
+                    continue
+                if tag == 'img':
+                    self.images.add(value)
+                clean.append((key, value))
+            elif key in ('width', 'height') and tag == 'img' and re.fullmatch(r'[0-9]{1,5}', value):
+                clean.append((key, value))
+            elif key in ('alt', 'title'):
+                clean.append((key, value))
+            elif key == 'class':
+                classes = [c for c in value.split() if re.fullmatch(r'ql-(?:align-(?:center|right|justify)|indent-[1-8]|size-(?:small|large|huge)|font-(?:serif|monospace)|direction-rtl|syntax)', c)]
+                if classes:
+                    clean.append((key, ' '.join(classes)))
+            elif key == 'style':
+                styles = []
+                for declaration in value.split(';'):
+                    prop, sep, val = declaration.partition(':')
+                    prop, val = prop.strip().lower(), val.strip()
+                    if prop in ('color', 'background-color') and re.fullmatch(r'(?:#[0-9a-fA-F]{3,8}|[a-zA-Z]+|rgba?\([0-9.,% ]+\))', val):
+                        styles.append(prop + ':' + val)
+                if styles:
+                    clean.append(('style', ';'.join(styles)))
+        self.parts.append('<' + tag + ''.join(' ' + k + '="' + escape(v, quote=True) + '"' for k, v in clean) + '>')
+
+    def handle_endtag(self, tag):
+        if tag in self.tags and tag not in ('img', 'br'):
+            self.parts.append('</' + tag + '>')
+
+    def handle_data(self, data):
+        self.parts.append(escape(data))
+
+
+def insight_render_content(content):
+    parser = InsightHTML()
+    if not re.search(r'<(?:p|div|h[1-6]|img|ul|ol|blockquote|pre)(?:\s|>)', content, re.I):
+        return escape(content), set()
+    parser.feed(content)
+    parser.close()
+    return ''.join(parser.parts), parser.images
+
+
 def insight_document(request, title, description, body, path, metadata="", status=200):
     base = os.environ.get("SITE_URL", "").strip().rstrip("/") or str(request.base_url).rstrip("/")
     url = escape(base + path, quote=True)
@@ -344,9 +408,14 @@ main{{max-width:1160px;margin:auto;padding:40px 22px 80px}}header{{border-bottom
 a{{color:#0369a1}}header a{{text-decoration:none;font-weight:800}}h1{{font-size:clamp(28px,5vw,42px);line-height:1.4;overflow-wrap:anywhere}}
 .insight-article{{max-width:800px;margin:auto;background:white;padding:clamp(20px,4vw,48px);border-radius:18px}}
 .article-content{{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.95;font-size:17px;margin:32px 0}}
+.article-content img{{max-width:100%;height:auto}}
+.article-content .ql-align-center{{text-align:center}}
+.article-content .ql-align-right{{text-align:right}}
+.article-content .ql-align-justify{{text-align:justify}}
 .article-images img{{display:block;max-width:100%;height:auto;margin:24px auto;border-radius:12px}}
 .article-meta{{color:#64748b;font-size:14px;display:flex;gap:16px;flex-wrap:wrap}}
-footer{{margin-top:40px;color:#64748b;font-size:13px}}</style></head>
+footer{{margin-top:40px;color:#64748b;font-size:13px}}
+</style><link rel="stylesheet" href="https://cdn.quilljs.com/1.3.6/quill.snow.css"></head>
 <body><header><a href="/">TECH REALTY INSIGHT</a></header><main>{body}
 <footer><a href="/insight">투자 인사이트 목록</a> · <a href="/#insight">대시보드로 돌아가기</a></footer></main></body></html>'''
     return HTMLResponse(html, status_code=status)
@@ -408,13 +477,14 @@ def insight_post(request: Request, post_id: str):
     post = posts[0]
     title = str(post.get("title") or "제목 없음")
     content = str(post.get("content") or "")
-    description = ' '.join(content.split())[:160]
+    rendered_content, inline_images = insight_render_content(content)
+    description = ' '.join(re.sub(r'<[^>]*>', '', content).split())[:160]
     category = INSIGHT_CATEGORIES[insight_category(post)]
     date = str(post.get("created_at") or '')
     author = str(post.get("nickname") or '운영자')
     images = insight_images(post)
-    figures = ''.join(f'<img src="{escape(url, quote=True)}" alt="{escape(title, quote=True)} — 첨부 이미지 {i+1}" loading="lazy">' for i, url in enumerate(images))
-    body = f'<article class="insight-article"><span class="insight-badge">{category}</span><h1>{escape(title)}</h1><div class="article-meta"><span>{escape(author)}</span><time datetime="{escape(date, quote=True)}">{escape(date[:10])}</time><span>조회 {escape(str(post.get("views") or 0))}</span></div><div class="article-content">{escape(content)}</div><div class="article-images">{figures}</div></article>'
+    figures = ''.join(f'<img src="{escape(url, quote=True)}" alt="{escape(title, quote=True)} — 첨부 이미지 {i+1}" loading="lazy">' for i, url in enumerate(images) if url not in inline_images)
+    body = f'<article class="insight-article"><span class="insight-badge">{category}</span><h1>{escape(title)}</h1><div class="article-meta"><span>{escape(author)}</span><time datetime="{escape(date, quote=True)}">{escape(date[:10])}</time><span>조회 {escape(str(post.get("views") or 0))}</span></div><div class="article-content ql-editor">{rendered_content}</div><div class="article-images">{figures}</div></article>'
     metadata = '<meta property="og:type" content="article">'
     if images:
         metadata += f'<meta property="og:image" content="{escape(images[0], quote=True)}">'
@@ -438,7 +508,10 @@ UI_HTML = """
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+  <!-- Quill 에디터 라이브러리 CDN -->
+  <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+  <script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
   <style>
     :root { --primary: #2563eb; --bg: #f8fafc; --card: #ffffff; --border: #e2e8f0; --text: #0f172a; --sub: #64748b; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -581,7 +654,7 @@ UI_HTML = """
     .img-badge { font-size: 11px; background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; padding: 1px 5px; border-radius: 4px; font-weight: 700; }
     .region-badge { font-size: 11.5px; background: #f1f5f9; color: #475569; padding: 2px 7px; border-radius: 4px; font-weight: 700; margin-right: 6px; }
 
-    #writeModal { border:1px solid #475569; border-radius:16px; padding:28px; width:min(680px, calc(100vw - 40px)); box-sizing:border-box; background:#ffffff; color:#0f172a; margin:auto; box-shadow: 0 20px 40px rgba(0,0,0,0.3); }
+    #writeModal { border:1px solid #475569; border-radius:16px; padding:28px; width:min(900px, calc(100vw - 32px)); box-sizing:border-box; background:#ffffff; color:#0f172a; margin:auto; box-shadow: 0 20px 40px rgba(0,0,0,0.3); }
     #writeModal::backdrop { background:rgba(15,23,42,.75); }
     .form-group { margin-bottom: 14px; }
     .form-label { font-size: 13.5px; font-weight: 700; color: #334155; margin-bottom: 6px; display: block; }
@@ -640,6 +713,16 @@ UI_HTML = """
     @media(max-width:1000px){.insight-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
     @media(max-width:620px){.insight-grid{grid-template-columns:1fr}.board-header{flex-wrap:wrap;gap:12px}}
   </style>
+<style>
+#insightQuillEditor .ql-editor img {max-width:100%;height:auto;cursor:pointer;pointer-events:auto;}
+#quillImageResizerBox {position:absolute;display:none;border:2px solid #2563eb;pointer-events:none;z-index:10000;box-sizing:border-box;}
+#quillImageResizerBox button {position:absolute;width:14px;height:14px;padding:0;background:#2563eb;border:2px solid white;border-radius:2px;pointer-events:auto;touch-action:none;}
+#quillImageResizerBox [data-dir="nw"] {top:-7px;left:-7px;cursor:nwse-resize;}
+#quillImageResizerBox [data-dir="ne"] {top:-7px;right:-7px;cursor:nesw-resize;}
+#quillImageResizerBox [data-dir="sw"] {bottom:-7px;left:-7px;cursor:nesw-resize;}
+#quillImageResizerBox [data-dir="se"] {bottom:-7px;right:-7px;cursor:nwse-resize;}
+.post-detail-content img {max-width:100%;height:auto;}
+</style>
 </head>
 <body>
 
@@ -719,11 +802,16 @@ UI_HTML = """
         <label class="form-label">제목</label>
         <input type="text" id="postTitleInput" class="form-control" placeholder="제목을 입력하세요" required maxlength="100">
       </div>
-      <div class="form-group">
+      <!-- 내용 입력 영역 분기 -->
+      <div class="form-group" id="normalContentGroup">
         <label class="form-label">내용 (단지 응원, 실거주 후기, 인프라 장단점 등)</label>
-        <textarea id="postContentInput" class="form-control" rows="8" placeholder="자유롭게 작성해 주세요" required></textarea>
+        <textarea id="postContentInput" class="form-control" rows="8" placeholder="자유롭게 작성해 주세요"></textarea>
       </div>
-      <div class="form-group">
+      <div class="form-group" id="insightEditorGroup" style="display:none;">
+        <label class="form-label">칼럼 본문 작성 (📷 캡처 원본 | 📱 스마트폰 사진 압축)</label>
+        <div id="insightQuillEditor" style="height: 480px; background: #ffffff; color: #1e293b; font-size: 16px;"></div>
+      </div>
+      <div class="form-group" id="normalImageGroup">
         <label class="form-label">현장 사진 첨부 (스마트폰 원본 사진도 자동 다운사이징 압축)</label>
         <input type="file" id="postImageInput" accept="image/*" multiple onchange="handleImageSelection(this)" style="font-size: 13px;">
         <div id="imagePreviewContainer" class="image-preview-grid"></div>
@@ -1734,6 +1822,228 @@ UI_HTML = """
 
   // ===== 일반 게시판 및 이미지 다운사이징 엔진 =====
   let currentBoardType = 'insight';
+  let quillInstance = null;
+
+  function initQuillEditor() {
+    if (quillInstance) return;
+
+    // 툴바 구성: 캡처 원본 삽입(📷)과 스마트폰 사진 압축 삽입(📱) 분리
+    const toolbarOptions = [
+      [{ 'font': [] }, { 'size': ['small', false, 'large', 'huge'] }],
+      [{ 'header': [1, 2, 3, false] }],
+      ['bold', 'italic', 'underline', 'strike'],
+      [{ 'color': [] }, { 'background': [] }],
+      [{ 'align': [] }],
+      [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+      [{ 'indent': '-1'}, { 'indent': '+1' }],
+      ['blockquote', 'link'],
+      ['clean']
+    ];
+
+    quillInstance = new Quill('#insightQuillEditor', {
+      theme: 'snow',
+      placeholder: '글과 함께 부동산 인사이트를 기록해 보세요! 상단 툴바 버튼으로 사진을 넣을 수 있습니다.',
+      modules: { toolbar: toolbarOptions }
+    });
+
+    // 툴바 끝에 직관적인 2종 사진 버튼 추가
+    const tbEl = quillInstance.getModule('toolbar').container;
+    const btnGroup = document.createElement('span');
+    btnGroup.className = 'ql-formats';
+    btnGroup.innerHTML = `
+      <button type="button" id="btnUploadOriginal" title="PC 캡처·스크린샷 (100% 무압축 원본)" style="width:auto; padding:0 8px; font-weight:700; color:#0284c7; font-size:12px;">📷 캡처원본</button>
+      <button type="button" id="btnUploadMobile" title="스마트폰 고용량 사진 (2048px 경량화 압축)" style="width:auto; padding:0 8px; font-weight:700; color:#16a34a; font-size:12px;">📱 폰사진압축</button>
+    `;
+    tbEl.appendChild(btnGroup);
+    setupImageResizerEngine();
+
+    document.getElementById('btnUploadOriginal').onclick = () => selectAndUpload(false);
+    document.getElementById('btnUploadMobile').onclick = () => selectAndUpload(true);
+
+  }
+
+  let activeResizerImg = null;
+  let finishImageResize = null;
+  let insightUploadPending = false;
+  let insightDraftVersion = 0;
+  let insightLastRange = {index: 0, length: 0};
+
+  function removeResizers() {
+    if (finishImageResize) finishImageResize();
+    activeResizerImg = null;
+    const box = document.getElementById('quillImageResizerBox');
+    if (box) box.style.display = 'none';
+  }
+
+  function updateResizerPosition() {
+    const box = document.getElementById('quillImageResizerBox');
+    const modal = document.getElementById('writeModal');
+    if (!box || !activeResizerImg) return;
+    if (!modal.open || !quillInstance.root.contains(activeResizerImg)) {
+      removeResizers(); return;
+    }
+    const r = activeResizerImg.getBoundingClientRect();
+    const rootRect = quillInstance.root.getBoundingClientRect();
+    const m = modal.getBoundingClientRect();
+    // Hide handles when the image is outside the editor's scrolling viewport.
+    if (!r.width || r.bottom <= rootRect.top || r.top >= rootRect.bottom) {
+      box.style.display = 'none'; return;
+    }
+    box.style.display = 'block';
+    box.style.left = (r.left - m.left - modal.clientLeft + modal.scrollLeft) + 'px';
+    box.style.top = (r.top - m.top - modal.clientTop + modal.scrollTop) + 'px';
+    box.style.width = r.width + 'px';
+    box.style.height = r.height + 'px';
+  }
+
+  function setupImageResizerEngine() {
+    const root = quillInstance.root;
+    const modal = document.getElementById('writeModal');
+    const box = document.createElement('div');
+    box.id = 'quillImageResizerBox';
+    box.contentEditable = 'false';
+    // A modal dialog occupies the top layer: the overlay must be inside it,
+    // but outside Quill's editable DOM so Parchment never removes the handles.
+    modal.appendChild(box);
+    const selectImage = (e) => {
+      if (e.target.tagName !== 'IMG') { removeResizers(); return; }
+      e.preventDefault();
+      e.stopPropagation();
+      if (activeResizerImg !== e.target) removeResizers();
+      activeResizerImg = e.target;
+      updateResizerPosition();
+    };
+    root.addEventListener('pointerdown', selectImage, true);
+    root.addEventListener('click', e => {
+      if (e.target.tagName === 'IMG') selectImage(e);
+    }, true);
+    root.addEventListener('dragstart', e => {
+      if (e.target.tagName === 'IMG') e.preventDefault();
+    });
+    root.addEventListener('load', updateResizerPosition, true);
+    root.addEventListener('keydown', removeResizers);
+    document.addEventListener('pointerdown', e => {
+      if (!root.contains(e.target) && !box.contains(e.target)) removeResizers();
+    }, true);
+    document.addEventListener('scroll', updateResizerPosition, true);
+    window.addEventListener('resize', updateResizerPosition);
+    new ResizeObserver(updateResizerPosition).observe(root);
+    modal.addEventListener('close', () => { insightDraftVersion++; removeResizers(); });
+    quillInstance.on('text-change', () => requestAnimationFrame(updateResizerPosition));
+    quillInstance.on('selection-change', range => {
+      if (range) insightLastRange = {index: range.index, length: range.length};
+    });
+    ['nw', 'ne', 'sw', 'se'].forEach(dir => {
+      const handle = document.createElement('button');
+      handle.type = 'button';
+      handle.dataset.dir = dir;
+      handle.setAttribute('aria-label', '이미지 크기 조절 ' + dir);
+      box.appendChild(handle);
+      handle.addEventListener('pointerdown', e => {
+        if (!activeResizerImg || e.button !== 0) return;
+        e.preventDefault(); e.stopPropagation();
+        const img = activeResizerImg;
+        const startX = e.clientX;
+        const startWidth = img.getBoundingClientRect().width;
+        const styleWidth = img.style.width;
+        const pointerId = e.pointerId;
+        let width = startWidth;
+        const move = event => {
+          if (event.pointerId !== pointerId) return;
+          event.preventDefault();
+          const cs = getComputedStyle(root);
+          const max = root.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+          width = Math.round(Math.min(max, Math.max(Math.min(60, max), startWidth +
+            (dir.endsWith('e') ? 1 : -1) * (event.clientX - startX))));
+          img.style.width = width + 'px';
+          updateResizerPosition();
+        };
+        const finish = event => {
+          if (event && event.pointerId !== undefined && event.pointerId !== pointerId) return;
+          document.removeEventListener('pointermove', move, true);
+          document.removeEventListener('pointerup', finish, true);
+          document.removeEventListener('pointercancel', finish, true);
+          window.removeEventListener('blur', finish);
+          finishImageResize = null;
+          img.style.width = styleWidth;
+          if (root.contains(img) && Math.round(startWidth) !== width) {
+            const blot = Quill.find(img);
+            const index = quillInstance.getIndex(blot);
+            quillInstance.getModule('history').cutoff();
+            quillInstance.formatText(index, 1, {width: String(width), height: false}, 'user');
+            quillInstance.getModule('history').cutoff();
+          }
+          updateResizerPosition();
+        };
+        finishImageResize = finish;
+        document.addEventListener('pointermove', move, true);
+        document.addEventListener('pointerup', finish, true);
+        document.addEventListener('pointercancel', finish, true);
+        window.addEventListener('blur', finish);
+      });
+    });
+  }
+
+  function selectAndUpload(isCompress) {
+    if (insightUploadPending) return;
+    const range = quillInstance.getSelection() || insightLastRange;
+    let insertionIndex = range.index;
+    const draft = insightDraftVersion;
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = 'image/*';
+    input.onchange = async () => {
+      const file = input.files[0];
+      if (!file || insightUploadPending) return;
+      insightUploadPending = true;
+      const trackEdits = delta => { insertionIndex = delta.transformPosition(insertionIndex); };
+      quillInstance.on('text-change', trackEdits);
+      const buttons = ['btnUploadOriginal', 'btnUploadMobile'].map(id => document.getElementById(id));
+      buttons.forEach(button => { button.disabled = true; });
+      try {
+        const url = await processAndUploadImage(file, isCompress);
+        if (draft !== insightDraftVersion || !document.getElementById('writeModal').open) return;
+        quillInstance.off('text-change', trackEdits);
+        const index = Math.min(insertionIndex, quillInstance.getLength() - 1);
+        quillInstance.insertEmbed(index, 'image', url, 'user');
+        quillInstance.setSelection(index + 1, 0, 'silent');
+      } catch (err) {
+        alert('이미지 업로드에 실패했습니다: ' + err.message);
+      } finally {
+        quillInstance.off('text-change', trackEdits);
+        insightUploadPending = false;
+        buttons.forEach(button => { button.disabled = false; });
+      }
+    };
+    input.click();
+  }
+
+  async function processAndUploadImage(file, isCompress) {
+    let finalFile = file;
+    let ext = file.name.split('.').pop() || 'png';
+    let contentType = file.type || 'image/png';
+
+    // 스마트폰 버튼을 눌렀을 때만 2048px WebP 리사이징
+    if (isCompress) {
+      finalFile = await resizeImage(file, 2048, 0.88);
+      ext = 'webp';
+      contentType = 'image/webp';
+    }
+
+    const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${ext}`;
+    const filePath = `posts/${fileName}`;
+
+    const { error } = await supabaseClient.storage
+      .from('board-images')
+      .upload(filePath, finalFile, {
+        contentType: contentType,
+        cacheControl: '3600',
+        upsert: false
+      });
+
+    if (error) throw error;
+    const { data: { publicUrl } } = supabaseClient.storage.from('board-images').getPublicUrl(filePath);
+    return publicUrl;
+  }
   let currentSelectedRegion = '전체';
   let currentTargetApt = '';
   let pendingCompressedImages = [];
@@ -1853,8 +2163,11 @@ UI_HTML = """
       supabaseClient.from('posts').update({ views: (post.views || 0) + 1 }).eq('id', postId).then(() => {});
 
       let imgHtml = '';
+      const inlineDoc = new DOMParser().parseFromString(isInsight ? (post.content || '') : '', 'text/html');
+      const inlineUrls = new Set(Array.from(inlineDoc.querySelectorAll('img'), img => img.getAttribute('src')));
       if (post.image_urls && post.image_urls.length > 0) {
         post.image_urls.forEach(url => {
+          if (inlineUrls.has(url)) return;
           imgHtml += `<img src="${insightEscape(insightImage(url))}" loading="lazy">`;
         });
       }
@@ -1869,7 +2182,7 @@ UI_HTML = """
           <span>등록일: ${dateStr}</span>
           <span>조회수: ${(post.views || 0) + 1}</span>
         </div>
-        <div class="post-detail-content">${insightEscape(post.content)}</div>
+        <div class="post-detail-content ${isInsight ? 'ql-editor' : ''}">${(boardType === 'insight') ? (post.content || '') : insightEscape(post.content)}</div>
         <div class="post-detail-images">${imgHtml}</div>
 
         <div class="comments-section">
@@ -1947,9 +2260,9 @@ UI_HTML = """
   async function resizeImage(file, maxWidth = 1200, quality = 0.8) {
     return new Promise((resolve, reject) => {
       const img = new Image();
-      img.src = URL.createObjectURL(file);
+      const objectUrl = URL.createObjectURL(file);
       img.onload = () => {
-        URL.revokeObjectURL(img.src);
+        URL.revokeObjectURL(objectUrl);
         let width = img.width;
         let height = img.height;
         if (width > maxWidth) {
@@ -1963,14 +2276,15 @@ UI_HTML = """
         ctx.drawImage(img, 0, 0, width, height);
 
         canvas.toBlob((blob) => {
-          if (!blob) return reject(new Error('Canvas to Blob failed'));
-          const resizedFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".webp", {
+          if (!blob || blob.type !== 'image/webp') return reject(new Error('이 브라우저에서 WebP 변환을 지원하지 않습니다. 캡처원본을 사용해 주세요.'));
+          const resizedFile = new File([blob], file.name.replace(/[.][^/.]+$/, "") + ".webp", {
             type: "image/webp", lastModified: Date.now()
           });
           resolve(resizedFile);
         }, "image/webp", quality);
       };
-      img.onerror = reject;
+      img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error('이미지를 읽을 수 없습니다. JPG 또는 PNG 파일을 사용해 주세요.')); };
+      img.src = objectUrl;
     });
   }
 
@@ -2004,6 +2318,9 @@ UI_HTML = """
     if (!currentUser) { alert('글을 작성하려면 카카오 로그인이 필요합니다.'); return; }
     if (!siteNickname) { openNicknameModal(); return; }
 
+    insightDraftVersion++;
+    removeResizers();
+    insightLastRange = {index: 0, length: 0};
     currentBoardType = boardType;
     currentTargetApt = targetApt;
     document.getElementById('insightCategoryGroup').style.display = boardType === 'insight' ? 'block' : 'none';
@@ -2028,16 +2345,50 @@ UI_HTML = """
     document.getElementById('postImageInput').value = '';
     document.getElementById('imagePreviewContainer').innerHTML = '';
     pendingCompressedImages = [];
+
+    if (boardType === 'insight') {
+      initQuillEditor();
+      document.getElementById('insightEditorGroup').style.display = 'block';
+      document.getElementById('normalContentGroup').style.display = 'none';
+      document.getElementById('normalImageGroup').style.display = 'none';
+      document.getElementById('postContentInput').removeAttribute('required');
+      if (quillInstance) quillInstance.setText('', 'silent');
+    } else {
+      document.getElementById('insightEditorGroup').style.display = 'none';
+      document.getElementById('normalContentGroup').style.display = 'block';
+      document.getElementById('normalImageGroup').style.display = 'block';
+      document.getElementById('postContentInput').setAttribute('required', 'required');
+    }
     document.getElementById('writeModal').showModal();
   }
 
-  function closeWriteModal() { document.getElementById('writeModal').close(); }
+  function closeWriteModal() { insightDraftVersion++; removeResizers(); document.getElementById('writeModal').close(); }
 
   document.getElementById('postWriteForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!currentUser) return;
+    if (currentBoardType === 'insight' && insightUploadPending) {
+      alert('이미지 업로드가 끝난 후 등록해 주세요.'); return;
+    }
+    removeResizers();
     const title = document.getElementById('postTitleInput').value.trim();
-    const content = document.getElementById('postContentInput').value.trim();
+    let content = '';
+    let uploadedUrls = [];
+
+    if (currentBoardType === 'insight') {
+      content = quillInstance.root.innerHTML;
+      if (!quillInstance.getText().trim() && !content.includes('<img')) {
+        alert('내용을 입력해 주세요.');
+        return;
+      }
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(content, 'text/html');
+      doc.querySelectorAll('img').forEach(img => {
+        if (img.src) uploadedUrls.push(img.src);
+      });
+    } else {
+      content = document.getElementById('postContentInput').value.trim();
+    }
     const region = (currentBoardType === 'region') ? document.getElementById('postRegionSelect').value : null;
     const aptName = (currentBoardType === 'apt') ? currentTargetApt : null;
     const submitBtn = document.getElementById('btnSubmitPost');
@@ -2045,7 +2396,7 @@ UI_HTML = """
     submitBtn.innerText = '업로드 중…';
 
     try {
-      const uploadedUrls = [];
+      if (currentBoardType !== 'insight') {
       for (const imgFile of pendingCompressedImages) {
         const fileExt = 'webp';
         const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
@@ -2059,6 +2410,7 @@ UI_HTML = """
           const { data: { publicUrl } } = supabaseClient.storage.from('board-images').getPublicUrl(filePath);
           uploadedUrls.push(publicUrl);
         }
+      }
       }
 
       const { error: insertErr } = await supabaseClient.from('posts').insert({
