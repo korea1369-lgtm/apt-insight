@@ -1865,7 +1865,7 @@ UI_HTML = """
     `;
     tbEl.appendChild(btnGroup);
     setupImageResizerEngine();
-    trackQuillSelection();
+    setupInsightImageEditing();
 
     document.getElementById('btnUploadOriginal').onclick = () => selectAndUpload(false);
     document.getElementById('btnUploadMobile').onclick = () => selectAndUpload(true);
@@ -1876,7 +1876,7 @@ UI_HTML = """
   let finishImageResize = null;
   let insightUploadPending = false;
   let insightDraftVersion = 0;
-  let insightLastRange = {index: 0, length: 0};
+  let insightLastRange = null;
 
   function removeResizers() {
     if (finishImageResize) finishImageResize();
@@ -1917,8 +1917,12 @@ UI_HTML = """
     modal.appendChild(box);
     const selectImage = (e) => {
       if (e.target.tagName !== 'IMG') { removeResizers(); return; }
-      e.preventDefault();
-      e.stopPropagation();
+      // Let pointerdown retain native image dragging; select the embed on click.
+      if (e.type === 'click') {
+        e.preventDefault(); e.stopPropagation();
+        const index = quillInstance.getIndex(Quill.find(e.target));
+        quillInstance.setSelection(index, 1, 'user');
+      }
       if (activeResizerImg !== e.target) removeResizers();
       activeResizerImg = e.target;
       updateResizerPosition();
@@ -1927,9 +1931,6 @@ UI_HTML = """
     root.addEventListener('click', e => {
       if (e.target.tagName === 'IMG') selectImage(e);
     }, true);
-    root.addEventListener('dragstart', e => {
-      if (e.target.tagName === 'IMG') e.preventDefault();
-    });
     root.addEventListener('load', updateResizerPosition, true);
     root.addEventListener('keydown', removeResizers);
     document.addEventListener('pointerdown', e => {
@@ -1994,9 +1995,149 @@ UI_HTML = """
     });
   }
 
+  let insightUploadRange = null;
+
+  function rememberInsightSelection() {
+    // Never focus the editor here: doing so can manufacture a cursor at zero.
+    const range = quillInstance.getSelection();
+    if (range) insightLastRange = {index: range.index, length: range.length};
+    return insightLastRange;
+  }
+
+  function setupInsightImageEditing() {
+    const q = quillInstance;
+    const root = q.root;
+    const modal = document.getElementById('writeModal');
+    ['btnUploadOriginal', 'btnUploadMobile'].forEach(id => {
+      const button = document.getElementById(id);
+      const capture = e => {
+        const range = rememberInsightSelection();
+        insightUploadRange = range ? {...range} : {index: q.getLength() - 1, length: 0};
+        // Capture before focus transfers from contenteditable to the toolbar.
+        e.preventDefault();
+      };
+      button.addEventListener('pointerdown', capture);
+      button.addEventListener('mousedown', capture);
+    });
+    // editor-change includes silent selection changes as well as user changes.
+    q.on('editor-change', (name, range) => {
+      if (name === 'selection-change' && range) {
+        insightLastRange = {index: range.index, length: range.length};
+      }
+    });
+    root.addEventListener('keyup', rememberInsightSelection);
+    root.addEventListener('mouseup', rememberInsightSelection);
+
+    // Use the system clipboard. Quill's existing HTML paste importer restores
+    // the standard image embed (including width); no private clipboard fallback.
+    ['copy', 'cut'].forEach(type => root.addEventListener(type, e => {
+      const range = q.getSelection();
+      if (!range || range.length !== 1 || !e.clipboardData) return;
+      const data = q.getContents(range.index, 1);
+      const op = data.ops[0];
+      if (!op || !op.insert || typeof op.insert.image !== 'string') return;
+      const image = document.createElement('img');
+      image.src = op.insert.image;
+      for (const attr of ['width', 'height', 'alt']) {
+        if (op.attributes && op.attributes[attr] != null) image.setAttribute(attr, op.attributes[attr]);
+      }
+      e.clipboardData.setData('text/html', image.outerHTML);
+      e.clipboardData.setData('text/plain', op.insert.image);
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (type === 'cut') {
+        q.getModule('history').cutoff();
+        q.deleteText(range.index, 1, 'user');
+        q.getModule('history').cutoff();
+        q.setSelection(range.index, 0, 'user');
+        removeResizers();
+      }
+    }, true));
+
+    let draggedImage = null;
+    const marker = document.createElement('div');
+    marker.id = 'insightImageDropMarker';
+    marker.style.cssText = 'display:none;position:absolute;width:3px;background:#2563eb;pointer-events:none;z-index:10001;';
+    modal.appendChild(marker);
+    const clearDrag = () => { draggedImage = null; marker.style.display = 'none'; };
+    const indexAtPoint = e => {
+      let range;
+      if (document.caretPositionFromPoint) {
+        const caret = document.caretPositionFromPoint(e.clientX, e.clientY);
+        if (caret) { range = document.createRange(); range.setStart(caret.offsetNode, caret.offset); range.collapse(true); }
+      } else if (document.caretRangeFromPoint) {
+        range = document.caretRangeFromPoint(e.clientX, e.clientY);
+      }
+      if (!range || !root.contains(range.startContainer)) return null;
+      let node = range.startContainer;
+      let offset = range.startOffset;
+      // An element offset is a child boundary; a text offset is a character.
+      if (node.nodeType === Node.ELEMENT_NODE && node.childNodes.length) {
+        if (offset < node.childNodes.length) { node = node.childNodes[offset]; offset = 0; }
+        else {
+          node = node.lastChild;
+          const blot = Quill.find(node, true);
+          if (blot) return Math.min(q.getLength() - 1, q.getIndex(blot) + blot.length());
+        }
+      }
+      if (node === root) return q.getLength() - 1;
+      const blot = Quill.find(node, true);
+      if (!blot) return null;
+      const inner = blot.index ? blot.index(node, offset) : 0;
+      return Math.max(0, Math.min(q.getLength() - 1, q.getIndex(blot) + Math.max(0, inner)));
+    };
+    root.addEventListener('dragstart', e => {
+      if (e.target.tagName !== 'IMG' || !e.dataTransfer) return;
+      if (finishImageResize) finishImageResize();
+      draggedImage = e.target;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/html', draggedImage.outerHTML);
+      e.dataTransfer.setData('text/plain', draggedImage.src);
+      e.dataTransfer.setData('application/x-insight-image', 'internal');
+    });
+    root.addEventListener('dragover', e => {
+      if (!draggedImage || !root.contains(draggedImage)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const index = indexAtPoint(e);
+      if (index === null) { marker.style.display = 'none'; return; }
+      const bounds = q.getBounds(index);
+      const container = q.container.getBoundingClientRect();
+      const m = modal.getBoundingClientRect();
+      marker.style.left = (container.left + bounds.left - m.left - modal.clientLeft + modal.scrollLeft) + 'px';
+      marker.style.top = (container.top + bounds.top - m.top - modal.clientTop + modal.scrollTop) + 'px';
+      marker.style.height = Math.max(18, bounds.height) + 'px';
+      marker.style.display = 'block';
+    });
+    root.addEventListener('drop', e => {
+      if (!draggedImage || !root.contains(draggedImage)) return;
+      e.preventDefault(); e.stopPropagation();
+      const target = indexAtPoint(e);
+      const from = q.getIndex(Quill.find(draggedImage));
+      const imageDelta = q.getContents(from, 1);
+      clearDrag(); removeResizers();
+      if (target === null || target === from || target === from + 1) return;
+      const Delta = Quill.import('delta');
+      // One Delta transaction preserves image attributes and one-step undo.
+      const change = target < from
+        ? new Delta().retain(target).concat(imageDelta).retain(from - target).delete(1)
+        : new Delta().retain(from).delete(1).retain(target - from - 1).concat(imageDelta);
+      q.getModule('history').cutoff();
+      q.updateContents(change, 'user');
+      q.getModule('history').cutoff();
+      q.setSelection(target < from ? target : target - 1, 1, 'user');
+    });
+    root.addEventListener('dragleave', e => {
+      if (!root.contains(e.relatedTarget)) marker.style.display = 'none';
+    });
+    document.addEventListener('dragend', clearDrag);
+    modal.addEventListener('close', clearDrag);
+  }
+
   function selectAndUpload(isCompress) {
     if (insightUploadPending) return;
-    const range = quillInstance.getSelection() || insightLastRange;
+    const range = insightUploadRange || rememberInsightSelection() || {index: quillInstance.getLength() - 1, length: 0};
+    insightUploadRange = null;
     let insertionIndex = range.index;
     const draft = insightDraftVersion;
     const input = document.createElement('input');
@@ -2015,7 +2156,8 @@ UI_HTML = """
         quillInstance.off('text-change', trackEdits);
         const index = Math.min(insertionIndex, quillInstance.getLength() - 1);
         quillInstance.insertEmbed(index, 'image', url, 'user');
-        quillInstance.setSelection(index + 1, 0, 'silent');
+        quillInstance.setSelection(index + 1, 0, 'user');
+        insightLastRange = {index: index + 1, length: 0};
       } catch (err) {
         alert('이미지 업로드에 실패했습니다: ' + err.message);
       } finally {
@@ -2330,7 +2472,8 @@ UI_HTML = """
 
     insightDraftVersion++;
     removeResizers();
-    insightLastRange = {index: 0, length: 0};
+    insightLastRange = null;
+    insightUploadRange = null;
     currentBoardType = boardType;
     currentTargetApt = targetApt;
     document.getElementById('insightCategoryGroup').style.display = boardType === 'insight' ? 'block' : 'none';
