@@ -897,6 +897,12 @@ UI_HTML = """
           <div class="hub-desc">서울, 경기, 대구, 부산 등 각 지역 부동산 논쟁과 생생한 임장 후기를 나눕니다.</div>
           <div class="hub-action">지역 게시판 바로가기 ➔</div>
         </div>
+        <div class="hub-card" onclick="navigateTo('macro')">
+          <div style="font-size: 12px; font-weight: 700; color: #ea580c; margin-bottom: 8px;">거시경제 지표</div>
+          <div class="hub-title">🌐 부동산 매크로</div>
+          <div class="hub-desc">금리, 통화량(M2), 환율, 미분양 추이 등 부동산 시장의 큰 흐름을 분석합니다.</div>
+          <div class="hub-action">매크로 분석실 바로가기 ➔</div>
+        </div>
         <div class="hub-card" onclick="navigateTo('insight')">
           <div style="font-size: 12px; font-weight: 700; color: #0284c7; margin-bottom: 8px;">주인장 칼럼</div>
           <div class="hub-title">✍️ 투자 인사이트</div>
