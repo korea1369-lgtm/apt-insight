@@ -456,6 +456,77 @@ def insight_render_content(content):
     return ''.join(parser.parts), parser.images
 
 
+# Shared reader lightbox for the dashboard and standalone insight documents.
+INSIGHT_LIGHTBOX = r"""
+<style>
+#insightDetailView img, .post-detail-content img, .post-detail-images img,
+.article-content img, .article-images img { cursor: zoom-in; }
+#insightImageLightbox { position:fixed; inset:0; width:100vw; height:100vh;
+  max-width:none; max-height:none; margin:0; padding:0; border:0;
+  background:rgba(0,0,0,0.9); overflow:hidden; box-sizing:border-box; }
+#insightImageLightbox[open] { display:flex; align-items:center; justify-content:center; }
+#insightImageLightbox::backdrop { background:rgba(0,0,0,0.85); }
+#insightImageLightbox img { display:block; width:auto; height:auto;
+  max-width:90vw; max-height:90vh; object-fit:contain; }
+#insightImageLightboxClose { position:absolute; top:16px; right:20px;
+  width:44px; height:44px; border:0; border-radius:50%; background:rgba(0,0,0,.5);
+  color:white; font-size:28px; cursor:pointer; }
+#insightImageLightboxClose:focus-visible { outline:2px solid white; outline-offset:3px; }
+</style>
+<dialog id="insightImageLightbox" aria-label="이미지 확대 보기">
+  <button id="insightImageLightboxClose" type="button" aria-label="확대 이미지 닫기" autofocus>✕</button>
+  <img id="insightImageLightboxImage" alt="">
+</dialog>
+<script>
+(() => {
+  const box = document.getElementById('insightImageLightbox');
+  const image = document.getElementById('insightImageLightboxImage');
+  const closeButton = document.getElementById('insightImageLightboxClose');
+  const selector = '#insightDetailView img, .post-detail-content img, .post-detail-images img, .article-content img, .article-images img';
+  let savedScroll = null;
+  let previousFocus = null;
+  const restore = () => {
+    if (!savedScroll) return;
+    for (const entry of savedScroll) {
+      if (entry.value) entry.element.style.setProperty('overflow', entry.value, entry.priority);
+      else entry.element.style.removeProperty('overflow');
+    }
+    savedScroll = null;
+    image.removeAttribute('src');
+    if (previousFocus && previousFocus.isConnected) previousFocus.focus({preventScroll:true});
+    previousFocus = null;
+  };
+  const close = () => { if (box.open) box.close(); restore(); };
+  closeButton.addEventListener('click', close);
+  box.addEventListener('click', event => { if (event.target === box) close(); });
+  box.addEventListener('cancel', event => { event.preventDefault(); close(); });
+  box.addEventListener('close', () => { if (!box.open) restore(); });
+  box.addEventListener('keydown', event => {
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); }
+  });
+  // Delegation also covers article content fetched after the initial page load.
+  document.addEventListener('click', event => {
+    const target = event.target instanceof Element ? event.target.closest(selector) : null;
+    if (!target || target.closest('#writeModal, #insightQuillEditor') || box.open) return;
+    const src = target.getAttribute('src') || target.currentSrc;
+    if (!src) return;
+    event.preventDefault();
+    previousFocus = document.activeElement;
+    image.src = src;
+    image.alt = target.alt || '확대 이미지';
+    box.showModal();
+    savedScroll = [document.documentElement, document.body].map(element => ({
+      element, value:element.style.getPropertyValue('overflow'),
+      priority:element.style.getPropertyPriority('overflow')
+    }));
+    savedScroll.forEach(entry => entry.element.style.setProperty('overflow', 'hidden', 'important'));
+    closeButton.focus({preventScroll:true});
+  });
+})();
+</script>
+"""
+
+
 def insight_document(request, title, description, body, path, metadata="", status=200):
     base = os.environ.get("SITE_URL", "").strip().rstrip("/") or str(request.base_url).rstrip("/")
     url = escape(base + path, quote=True)
@@ -483,7 +554,7 @@ a{{color:#0369a1}}header a{{text-decoration:none;font-weight:800}}h1{{font-size:
 footer{{margin-top:40px;color:#64748b;font-size:13px}}
 </style><link rel="stylesheet" href="https://cdn.quilljs.com/1.3.6/quill.snow.css"></head>
 <body><header><a href="/">TECH REALTY INSIGHT</a></header><main>{body}
-<footer><a href="/insight">투자 인사이트 목록</a> · <a href="/#insight">대시보드로 돌아가기</a></footer></main></body></html>'''
+<footer><a href="/insight">투자 인사이트 목록</a> · <a href="/#insight">대시보드로 돌아가기</a></footer></main>{INSIGHT_LIGHTBOX}</body></html>'''
     return HTMLResponse(html, status_code=status)
 
 def insight_unavailable(request):
@@ -2004,7 +2075,33 @@ UI_HTML = """
       if (e.target.tagName === 'IMG') selectImage(e);
     }, true);
     root.addEventListener('load', updateResizerPosition, true);
-    root.addEventListener('keydown', removeResizers);
+    // Capture before Quill's keyboard bindings, including focus on resize handles.
+    document.addEventListener('keydown', e => {
+      if (!modal.open || !activeResizerImg || e.isComposing || e.keyCode === 229) return;
+      const inEditor = root.contains(e.target);
+      const inResizer = box.contains(e.target);
+      if (!inEditor && !inResizer) return;
+      if (e.key !== 'Delete' && e.key !== 'Backspace') {
+        if (inEditor && !['Shift', 'Control', 'Alt', 'Meta'].includes(e.key)) removeResizers();
+        return;
+      }
+      const img = activeResizerImg;
+      if (!root.contains(img)) { removeResizers(); return; }
+      const blot = Quill.find(img);
+      if (!blot) { removeResizers(); return; }
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      // Finish any live drag before removing its target and detach drag listeners.
+      removeResizers();
+      const index = quillInstance.getIndex(blot);
+      const history = quillInstance.getModule('history');
+      history.cutoff();
+      quillInstance.deleteText(index, 1, 'user');
+      history.cutoff();
+      const cursor = Math.min(index, quillInstance.getLength() - 1);
+      quillInstance.setSelection(cursor, 0, 'user');
+      insightLastRange = {index: cursor, length: 0};
+    }, true);
     document.addEventListener('pointerdown', e => {
       if (!root.contains(e.target) && !box.contains(e.target)) removeResizers();
     }, true);
@@ -2669,6 +2766,8 @@ UI_HTML = """
 </body>
 </html>
 """
+
+UI_HTML = UI_HTML.replace("</body>", INSIGHT_LIGHTBOX + "</body>")
 
 @app.get("/", response_class=HTMLResponse)
 def index():
