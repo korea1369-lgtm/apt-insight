@@ -110,6 +110,61 @@ async def log_compare_api(payload: dict):
 
 app.include_router(macro_router)
 
+# =========================================================================
+# [부동산 매크로 보조지표 API] 전세가율(R-ONE) 및 인허가실적(KOSIS) 연동
+# =========================================================================
+@app.get("/api/macro/regional-indicator")
+def get_macro_regional_indicator(
+    indicator: str = Query(..., description="jeonse_ratio(전세가율) 또는 housing_permits(인허가량)"),
+    region: str = Query("전국", description="시도명 (대구, 부산, 서울, 전국 등)")
+):
+    """
+    macro_regional_indicators 테이블에서 지표 시계열 데이터 반환
+    """
+    clean_reg = region.replace("전체", "").strip()[:2]
+    if not clean_reg:
+        clean_reg = "전국"
+
+    conn = sqlite3.connect(DB_FILE, timeout=10.0)
+    c = conn.cursor()
+
+    if indicator in ("jeonse_ratio", "jeonse"):
+        rows = c.execute("""
+            SELECT deal_ym, jeonse_ratio 
+            FROM macro_regional_indicators 
+            WHERE region_name = ? AND jeonse_ratio IS NOT NULL
+            ORDER BY deal_ym ASC
+        """, (clean_reg,)).fetchall()
+        unit = "%"
+        name = f"아파트 전세가율 ({clean_reg})"
+        data = [{"date": r[0], "value": round(float(r[1]), 2)} for r in rows]
+
+    elif indicator in ("housing_permits", "permits"):
+        rows = c.execute("""
+            SELECT deal_ym, permit_count 
+            FROM macro_regional_indicators 
+            WHERE region_name = ? AND permit_count IS NOT NULL
+            ORDER BY deal_ym ASC
+        """, (clean_reg,)).fetchall()
+        unit = "호"
+        name = f"주택건설 인허가실적 ({clean_reg})"
+        data = [{"date": r[0], "value": int(r[1])} for r in rows]
+
+    else:
+        conn.close()
+        return {"result": "error", "message": "지원하지 않는 지표입니다."}
+
+    conn.close()
+    return {
+        "result": "ok",
+        "indicator": indicator,
+        "region": clean_reg,
+        "name": name,
+        "unit": unit,
+        "data": data
+    }
+
+
 @app.get("/api/search-apt")
 def search_apt(q: str = Query("")):
     query_str = q.strip().lower()
@@ -752,7 +807,7 @@ UI_HTML = """
       <h2 id="nicknameTitle" style="margin-top:0;font-size:21px;">사이트 전용 닉네임 설정</h2>
       <p id="nicknameHelp" style="font-size:13.5px;color:#cbd5e1;line-height:1.5;">
         카카오톡 실명 대신 게시판에서 활동할 닉네임입니다.<br>
-        <span style="color:#ef4444;font-weight:700;">⚠️️ 닉네임은 최초 1회 설정 후 변경할 수 없으니 신중히 입력해 주세요.</span><br>
+        <span style="color:#ef4444;font-weight:700;">⚠ 닉네임은 최초 1회 설정 후 변경할 수 없으니 신중히 입력해 주세요.</span><br>
         (한글·영문·숫자 2~12자)
       </p>
       <input id="nicknameInput" autocomplete="off" spellcheck="false" required placeholder="예: 범어대장, 아인싸러" maxlength="12">
@@ -1932,12 +1987,9 @@ UI_HTML = """
     const box = document.createElement('div');
     box.id = 'quillImageResizerBox';
     box.contentEditable = 'false';
-    // A modal dialog occupies the top layer: the overlay must be inside it,
-    // but outside Quill's editable DOM so Parchment never removes the handles.
     modal.appendChild(box);
     const selectImage = (e) => {
       if (e.target.tagName !== 'IMG') { removeResizers(); return; }
-      // Let pointerdown retain native image dragging; select the embed on click.
       if (e.type === 'click') {
         e.preventDefault(); e.stopPropagation();
         const index = quillInstance.getIndex(Quill.find(e.target));
@@ -2018,7 +2070,6 @@ UI_HTML = """
   let insightUploadRange = null;
 
   function rememberInsightSelection() {
-    // Never focus the editor here: doing so can manufacture a cursor at zero.
     const range = quillInstance.getSelection();
     if (range) insightLastRange = {index: range.index, length: range.length};
     return insightLastRange;
@@ -2033,13 +2084,11 @@ UI_HTML = """
       const capture = e => {
         const range = rememberInsightSelection();
         insightUploadRange = range ? {...range} : {index: q.getLength() - 1, length: 0};
-        // Capture before focus transfers from contenteditable to the toolbar.
         e.preventDefault();
       };
       button.addEventListener('pointerdown', capture);
       button.addEventListener('mousedown', capture);
     });
-    // editor-change includes silent selection changes as well as user changes.
     q.on('editor-change', (name, range) => {
       if (name === 'selection-change' && range) {
         insightLastRange = {index: range.index, length: range.length};
@@ -2048,8 +2097,6 @@ UI_HTML = """
     root.addEventListener('keyup', rememberInsightSelection);
     root.addEventListener('mouseup', rememberInsightSelection);
 
-    // Use the system clipboard. Quill's existing HTML paste importer restores
-    // the standard image embed (including width); no private clipboard fallback.
     ['copy', 'cut'].forEach(type => root.addEventListener(type, e => {
       const range = q.getSelection();
       if (!range || range.length !== 1 || !e.clipboardData) return;
@@ -2091,7 +2138,6 @@ UI_HTML = """
       if (!range || !root.contains(range.startContainer)) return null;
       let node = range.startContainer;
       let offset = range.startOffset;
-      // An element offset is a child boundary; a text offset is a character.
       if (node.nodeType === Node.ELEMENT_NODE && node.childNodes.length) {
         if (offset < node.childNodes.length) { node = node.childNodes[offset]; offset = 0; }
         else {
@@ -2138,7 +2184,6 @@ UI_HTML = """
       clearDrag(); removeResizers();
       if (target === null || target === from || target === from + 1) return;
       const Delta = Quill.import('delta');
-      // One Delta transaction preserves image attributes and one-step undo.
       const change = target < from
         ? new Delta().retain(target).concat(imageDelta).retain(from - target).delete(1)
         : new Delta().retain(from).delete(1).retain(target - from - 1).concat(imageDelta);
@@ -2194,7 +2239,6 @@ UI_HTML = """
     let ext = file.name.split('.').pop() || 'png';
     let contentType = file.type || 'image/png';
 
-    // 스마트폰 버튼을 눌렀을 때만 2048px WebP 리사이징
     if (isCompress) {
       finalFile = await resizeImage(file, 2048, 0.88);
       ext = 'webp';
