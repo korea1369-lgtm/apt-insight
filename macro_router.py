@@ -8,7 +8,7 @@ macro_router = APIRouter()
 # 1. 기존 매크로 데이터베이스
 DB_PATH = "macro_insight.db"
 
-# 2. 이번에 인허가 및 전세가율을 적재한 마스터 데이터베이스
+# 2. 이번에 인허가, 전세가율, 매매가격지수를 적재한 마스터 데이터베이스
 MASTER_DB_PATH = os.path.join(os.path.dirname(__file__), "apt_data_render_master.db")
 
 def get_db():
@@ -57,6 +57,7 @@ def get_symbols():
 def get_indicators():
     return {
         "indicators": [
+            {"id": "SALE_PRICE_INDEX", "name": "아파트 매매가격지수", "category": "가치평가", "unit": "pt", "is_regional": True, "desc": "한국부동산원 공식 아파트 실거래 매매가격지수 (2021.11=100)"},
             {"id": "BOK_RATE", "name": "한국은행 기준금리", "category": "거시/금리", "unit": "%", "is_regional": False, "desc": "한국은행 정책 기준금리 (2006-2026)"},
             {"id": "HOUSING_PERMIT", "name": "국토부 주택건설 인허가 실적", "category": "수급/수익률", "unit": "호", "is_regional": True, "desc": "국토교통부 시도별 월간 주택건설 인허가실적 (공급 선행지표)"},
             {"id": "UNSOLD", "name": "국토부 미분양 매물 수", "category": "수급/수익률", "unit": "호", "is_regional": True, "desc": "국토교통부 시/도별 미분양 주택수"},
@@ -77,6 +78,33 @@ def clean_region_name(raw_name: str) -> str:
 
 @macro_router.get("/api/indicator_series")
 def get_indicator_series(ind_id: str, region: str = "전국"):
+    # 0. 아파트 매매가격지수 (신규 적재 DB 연동)
+    if ind_id in ["SALE_PRICE_INDEX", "PRICE_INDEX"]:
+        clean_reg = clean_region_name(region)
+        conn = get_master_db()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT deal_ym, sale_price_index 
+            FROM macro_regional_indicators 
+            WHERE region_name = ? AND sale_price_index IS NOT NULL AND deal_ym LIKE '%-%'
+            ORDER BY deal_ym ASC
+        """, (clean_reg,))
+        rows = cur.fetchall()
+        if not rows:
+            cur.execute("""
+                SELECT deal_ym, sale_price_index 
+                FROM macro_regional_indicators 
+                WHERE region_name = '전국' AND sale_price_index IS NOT NULL AND deal_ym LIKE '%-%'
+                ORDER BY deal_ym ASC
+            """)
+            rows = cur.fetchall()
+        conn.close()
+        return {
+            "ind_id": ind_id,
+            "region": region,
+            "series": [{"time": f"{r['deal_ym']}-01", "value": round(float(r['sale_price_index']), 2)} for r in rows]
+        }
+
     # 1. 주택건설 인허가 실적 (신규 적재 DB 연동)
     if ind_id in ["HOUSING_PERMIT", "PERMITS", "PERMIT"]:
         clean_reg = clean_region_name(region)
@@ -195,8 +223,8 @@ def get_indicator_regions(ind_id: str):
         "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주"
     ]
     
-    # 신규 DB 연동 지표 (인허가, 전세가율)는 17개 시도 전체 100% 지원
-    if ind_id in ["HOUSING_PERMIT", "PERMITS", "PERMIT", "JEONSE_RATIO"]:
+    # 신규 DB 연동 지표 (인허가, 전세가율, 매매가격지수)는 17개 시도 전체 100% 지원
+    if ind_id in ["HOUSING_PERMIT", "PERMITS", "PERMIT", "JEONSE_RATIO", "SALE_PRICE_INDEX", "PRICE_INDEX"]:
         return {
             "ind_id": ind_id,
             "regions": [

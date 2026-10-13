@@ -33,6 +33,33 @@
     .brand { font-weight: 800; font-size: 1.05rem; color: #fff; margin-right: 6px; }
     .brand span { color: var(--accent); }
 
+    /* 주기 전환 토글 바 (월간 / 연간) */
+    .period-toggle-bar {
+      display: inline-flex;
+      background: #181b24;
+      border: 1px solid var(--border);
+      padding: 2px;
+      border-radius: 6px;
+      gap: 2px;
+    }
+    .btn-period-mode {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 4px 10px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-period-mode:hover { color: #fff; }
+    .btn-period-mode.active {
+      background: var(--accent);
+      color: #fff;
+      box-shadow: 0 1px 4px rgba(41,98,255,0.4);
+    }
+
     .indicator-tags { display: flex; align-items: center; gap: 8px; }
     .ind-tag {
       display: flex;
@@ -273,7 +300,7 @@
     }
     .legend-row { display: flex; align-items: center; gap: 8px; font-size: 0.88rem; font-weight: 700; }
 
-    /* 트레이딩뷰 Symbol search 모달 규격 (코딩167.png) */
+    /* 모달 규격 */
     .modal-overlay {
       display: none;
       position: fixed;
@@ -448,11 +475,24 @@
 
 <header>
   <div class="brand">📈 <span>부동산</span>매크로</div>
+
+  <!-- [월간 | 연간] 선택 토글 -->
+  <div class="period-toggle-bar">
+    <button class="btn-period-mode active" id="btn-period-m" onclick="setPeriodMode('monthly')">📅 월간</button>
+    <button class="btn-period-mode" id="btn-period-y" onclick="setPeriodMode('yearly')">📊 연간</button>
+  </div>
+
   <div class="indicator-tags" id="tag-container"></div>
 
   <button class="nav-btn" onclick="openRegionModal()">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
     지역 선택 및 비교
+  </button>
+
+  <!-- + 매매가격지수 버튼 -->
+  <button class="nav-btn" onclick="openPriceIndexModal()" style="color: #f59e0b; border-color: rgba(245, 158, 11, 0.4); background: rgba(245, 158, 11, 0.08);">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+    매매가격지수
   </button>
 
   <button class="nav-btn btn-indicator" onclick="openIndicatorModal()">
@@ -462,7 +502,6 @@
 </header>
 
 <div id="workspace">
-  <!-- 좌측 분석 툴바: 커서, 측정 자, 각도기, 지우개 -->
   <div id="sidebar-toolbar">
     <button class="side-btn active" id="tool-cursor" onclick="setSideTool('cursor')" title="기본 커서">┼</button>
     <div class="side-sep"></div>
@@ -484,7 +523,7 @@
   </div>
 </div>
 
-<!-- 1. 트레이딩뷰 Symbol search 모달 (코딩167.png 규격) -->
+<!-- 1. 트레이딩뷰 Symbol search 모달 -->
 <div class="modal-overlay" id="region-modal">
   <div class="modal-card">
     <div class="modal-header">
@@ -492,7 +531,6 @@
       <button class="close-btn" onclick="closeRegionModal()">✕</button>
     </div>
 
-    <!-- 상단 글자 입력창 및 나누기 컨트롤 바 -->
     <div class="tv-search-bar">
       <span class="tv-search-icon">🔍</span>
       <input type="text" id="tv-symbol-input" class="tv-input" placeholder="지역 선택 시 자동 입력 또는 직접 수식 입력 (예: 서울 전체/대구광역시)" onkeydown="if(event.key==='Enter') submitModalExpr()">
@@ -530,9 +568,24 @@
       <button class="m-tab active" onclick="renderIndTab('ALL', this)">전체 지표</button>
       <button class="m-tab" onclick="renderIndTab('VAL', this)">가치평가 (PIR / HAI / 전세가율)</button>
       <button class="m-tab" onclick="renderIndTab('MACRO', this)">거시/금리 (기준금리 / 가계부채)</button>
-      <button class="m-tab" onclick="renderIndTab('SUPPLY', this)">수급/수익률 (미분양 / 전환율)</button>
+      <button class="m-tab" onclick="renderIndTab('SUPPLY', this)">수급/수익률 (인허가 / 미분양 / 전환율)</button>
     </div>
     <div class="ind-card-list" id="ind-list-box"></div>
+  </div>
+</div>
+
+<!-- 3. 매매가격지수 지역 선택 모달 -->
+<div class="modal-overlay" id="price-index-modal">
+  <div class="modal-card" style="max-width: 540px;">
+    <div class="modal-header">
+      <h3>📈 한국부동산원 아파트 매매가격지수</h3>
+      <button class="close-btn" onclick="closePriceIndexModal()">✕</button>
+    </div>
+    <div style="padding: 12px 20px; font-size: 0.85rem; color: #9aa0a6; border-bottom: 1px solid var(--border);">
+      지역을 선택하면 <strong>상단 메인 차트(좌측 Y축)</strong>에 서로 다른 색상의 매매가격지수(2021.11=100) 곡선이 추가됩니다.
+    </div>
+    <div class="item-grid-list" id="price-index-region-grid" style="grid-template-columns: repeat(3, 1fr); padding: 14px 20px; max-height: 380px;">
+    </div>
   </div>
 </div>
 
@@ -546,7 +599,10 @@
   let isBroadcasting = false;
   let maximizedPanelId = null;
 
-  // Shared monthly calendar: logical index N must mean the same date in every chart.
+  // 주기 모드 ('monthly' | 'yearly')
+  let currentPeriodMode = 'monthly';
+
+  // Shared calendar synchronization
   const syncedCharts = new Map();
   let syncCalendar = [];
   let sharedLogicalRange = null;
@@ -584,7 +640,6 @@
       syncLayoutFrame = null;
       const visible = [...syncedCharts.entries()].filter(([, e]) => e.container.clientWidth > 0 && e.container.clientHeight > 0);
       if (!visible.length) return;
-      // A scrollbar in the sub-panel stack must not shorten only its plot area.
       const width = Math.min(...visible.map(([, e]) => e.container.clientWidth));
       sharedAxisWidth = Math.ceil(Math.max(sharedAxisWidth, ...visible.map(([c]) => c.priceScale('right').width())));
       syncingRange = true;
@@ -630,15 +685,17 @@
     const oldStart = syncCalendar[0];
     syncingRange = true;
     try {
-      series.setData(data); // Preserve the API data and all real values exactly.
+      series.setData(data);
       if (times.length) {
         const first = times[0], last = times[times.length - 1];
         const calendar = [];
         let year = Number(first.slice(0, 4)), month = Number(first.slice(5, 7));
         let time;
+        const stepMonth = (currentPeriodMode === 'yearly') ? 12 : 1;
         while ((time = String(year) + '-' + String(month).padStart(2, '0') + '-01') <= last) {
           calendar.push(time);
-          if (++month === 13) { month = 1; year++; }
+          month += stepMonth;
+          if (month > 12) { month = 1; year++; }
         }
         if (calendar.length !== syncCalendar.length || calendar[0] !== oldStart) {
           syncCalendar = calendar;
@@ -678,7 +735,6 @@
         const target = candidates.find(i => i.series && Number.isFinite(i.dataMap?.[key])) || candidates.find(i => i.series);
         if (!target) { chart.clearCrosshairPosition(); return; }
         const value = target.dataMap?.[key];
-        // Keep the source horizontal line at the pointer; missing target values are not fabricated as zero.
         const y = chart === source ? param.point.y : entry.container.clientHeight / 2;
         const price = chart !== source && Number.isFinite(value) ? value : target.series.coordinateToPrice(y);
         if (Number.isFinite(price)) chart.setCrosshairPosition(price, param.time, target.series);
@@ -688,26 +744,125 @@
     } finally { isBroadcasting = false; }
   }
 
-  // 측정 도구 상태
+  // ================= 연간 집계 엔진 (Stock vs Flow vs Average) =================
+  function convertMonthlyToYearly(monthlyData, modeType = 'avg') {
+    if (!monthlyData || !monthlyData.length) return [];
+    const groups = {};
+    monthlyData.forEach(item => {
+      const year = String(item.time).slice(0, 4);
+      if (!groups[year]) groups[year] = [];
+      groups[year].push(item);
+    });
+
+    return Object.keys(groups).sort().map(year => {
+      const items = groups[year];
+      let finalVal;
+
+      if (modeType === 'stock') {
+        items.sort((a, b) => String(a.time).localeCompare(String(b.time)));
+        finalVal = Math.round(items[items.length - 1].value);
+      } else if (modeType === 'sum') {
+        const sum = items.reduce((acc, cur) => acc + cur.value, 0);
+        finalVal = Math.round(sum);
+      } else {
+        const avg = items.reduce((acc, cur) => acc + cur.value, 0) / items.length;
+        finalVal = Math.round(avg * 100) / 100;
+      }
+      return { time: `${year}-01-01`, value: finalVal };
+    });
+  }
+
+  function getIndicatorModeType(indId) {
+    if (!indId) return 'avg';
+    const id = String(indId).toUpperCase();
+    if (id.includes('UNSOLD') || id.includes('미분양')) return 'stock';
+    if (id.includes('PERMIT') || id.includes('인허가')) return 'sum';
+    return 'avg';
+  }
+
+  function setPeriodMode(mode) {
+    if (currentPeriodMode === mode) return;
+    currentPeriodMode = mode;
+
+    document.getElementById('btn-period-m').classList.toggle('active', mode === 'monthly');
+    document.getElementById('btn-period-y').classList.toggle('active', mode === 'yearly');
+
+    syncCalendar = [];
+    sharedLogicalRange = null;
+
+    activeIndicators.forEach(ind => {
+      if (!ind.rawSeries) return;
+      const displayData = (mode === 'yearly') 
+        ? convertMonthlyToYearly(ind.rawSeries, 'avg') 
+        : ind.rawSeries;
+      
+      setSynchronizedData(ind.series, displayData);
+      ind.dataMap = {};
+      displayData.forEach(item => { ind.dataMap[item.time] = item.value; });
+
+      if (displayData.length > 0) {
+        const lastItem = displayData[displayData.length - 1];
+        ind.lastTime = lastItem.time;
+        ind.series.setMarkers([{
+          time: lastItem.time,
+          position: 'aboveBar',
+          color: ind.color,
+          shape: 'arrowDown',
+          text: (mode === 'yearly') ? '연간' : '⚠️'
+        }]);
+      }
+    });
+
+    activeSubPanels.forEach(p => {
+      if (!p.rawSeries) return;
+      const modeType = getIndicatorModeType(p.indId);
+      const displayData = (mode === 'yearly') 
+        ? convertMonthlyToYearly(p.rawSeries, modeType) 
+        : p.rawSeries;
+
+      setSynchronizedData(p.series, displayData);
+      p.dataMap = {};
+      displayData.forEach(item => { p.dataMap[item.time] = item.value; });
+
+      const lastValElem = document.getElementById(`sub-val-${p.id}`);
+      if (lastValElem && displayData.length > 0) {
+        const lastItem = displayData[displayData.length - 1];
+        lastValElem.innerText = `${lastItem.value.toLocaleString()} ${p.unit}`;
+      }
+    });
+
+    fitMainDataRange();
+    clearMeasure();
+  }
+
   let currentTool = 'cursor';
   let measureStep = 0;
   let p1 = null, p2 = null;
 
-  const PALETTE = ['#2962ff', '#e91e63', '#00bcd4', '#ff9800', '#4caf50'];
+  // 일반 평당가 팔레트
+  const PALETTE = ['#2962ff', '#e91e63', '#00bcd4', '#4caf50', '#ab47bc'];
+  // 매매가격지수 전용 다채로운 팔레트 (황금색, 에메랄드, 보라, 오렌지코랄, 시안, 핑크)
+  const INDEX_PALETTE = ['#f59e0b', '#10b981', '#a855f7', '#ff7043', '#06b6d4', '#ec4899'];
   const SUB_COLORS = ['#00bcd4', '#ab47bc', '#ff9800', '#4caf50', '#ff5722'];
-  const CAT_LABELS = { '84': '국평84', 'TOP30': '상위30', '59': '소형59', 'ALL': '전체평균' };
+  const CAT_LABELS = { '84': '국평84', 'TOP30': '상위30', '59': '소형59', 'ALL': '전체평균', 'INDEX': '지수' };
 
   function formatKoreanDate(time) {
     if (!time) return "";
-    let y, m;
+    let y, m, fullYear;
     if (typeof time === 'string') {
       const parts = time.split('-');
+      fullYear = parts[0];
       y = parts[0].slice(2);
       m = parseInt(parts[1], 10);
     } else if (time.year && time.month) {
+      fullYear = String(time.year);
       y = String(time.year).slice(2);
       m = time.month;
     } else return String(time);
+
+    if (currentPeriodMode === 'yearly') {
+      return `${fullYear}년`;
+    }
     return `${y}년 ${m}월`;
   }
 
@@ -717,7 +872,6 @@
     return `${t.year}-${String(t.month).padStart(2,'0')}-01`;
   }
 
-  // 우측 Y축 스크롤 증폭 및 차트 본문 수직 패닝 엔진
   function attachVerticalScaleAndPan(container, chartInstance, getSeriesList) {
     let scaleMultiplier = 1.0;
     let offsetShift = 0.0;
@@ -745,7 +899,7 @@
     container.addEventListener('mousemove', (e) => {
       if (currentTool !== 'cursor') return;
       const rect = container.getBoundingClientRect();
-      const onAxis = (e.clientX - rect.left >= rect.width - 70);
+      const onAxis = (e.clientX - rect.left >= rect.width - 70 || e.clientX - rect.left <= 70);
 
       if (onAxis !== isHoverPriceAxis) {
         isHoverPriceAxis = onAxis;
@@ -784,7 +938,7 @@
     container.addEventListener('mousedown', (e) => {
       if (currentTool !== 'cursor') return;
       const rect = container.getBoundingClientRect();
-      if (e.clientX - rect.left >= rect.width - 70) return;
+      if (e.clientX - rect.left >= rect.width - 70 || e.clientX - rect.left <= 70) return;
       if (e.button === 0 || e.button === 1) {
         isDragging = true;
         startY = e.clientY;
@@ -812,7 +966,8 @@
       crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
       handleScroll: { mouseWheel: true, pressedMouseMove: true },
       handleScale: { axisPressedMouseMove: { time: true, price: true }, mouseWheel: true },
-      rightPriceScale: { borderColor: '#2a2e39', autoScale: true },
+      rightPriceScale: { borderColor: '#2a2e39', autoScale: true, visible: true },
+      leftPriceScale: { borderColor: '#2a2e39', autoScale: true, visible: false },
       timeScale: { borderColor: '#2a2e39', timeVisible: false, rightOffset: 8 },
       localization: { timeFormatter: (t) => formatKoreanDate(t) }
     });
@@ -835,7 +990,6 @@
     }).observe(container);
 
     registerSyncedChart(mainChart, container);
-
     initMeasureEvents(container);
   }
 
@@ -849,16 +1003,18 @@
     }
 
     const tKey = formatTimeKey(param.time);
-    let html = `<div style="color:#787b86; font-size:0.85rem; margin-bottom:2px;">${formatKoreanDate(param.time)}</div>`;
+    const modeLabel = (currentPeriodMode === 'yearly') ? '[연간 집계]' : '';
+    let html = `<div style="color:#787b86; font-size:0.85rem; margin-bottom:2px;">${formatKoreanDate(param.time)} ${modeLabel}</div>`;
     activeIndicators.forEach(ind => {
       const v = ind.dataMap ? ind.dataMap[tKey] : null;
       if (v !== null && v !== undefined) {
-        const unit = ind.expr.includes('/') ? '배' : '만/평';
-          const isPending = (ind.lastTime && (tKey === ind.lastTime || formatTimeKey(param.time) === ind.lastTime));
-          const pendingBadge = isPending 
-            ? ` <span style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; font-size: 0.75rem; padding: 1px 5px; border-radius: 4px; border: 1px solid rgba(245, 158, 11, 0.4); margin-left: 4px;">⚠️ 신고 진행 중 (집계율 불완전)</span>` 
-            : '';
-          html += `<div class="legend-row" style="color:${ind.color};"><span>● ${ind.expr} (${CAT_LABELS[ind.cat]}):</span><span>${v.toLocaleString()} ${unit}${pendingBadge}</span></div>`;
+        const unit = ind.unit || (ind.expr.includes('/') ? '배' : '만/평');
+        const catLabel = ind.isIndex ? '지수' : (CAT_LABELS[ind.cat] || ind.cat);
+        const isPending = (!ind.isIndex && currentPeriodMode === 'monthly' && ind.lastTime && (tKey === ind.lastTime || formatTimeKey(param.time) === ind.lastTime));
+        const pendingBadge = isPending 
+          ? ` <span style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; font-size: 0.75rem; padding: 1px 5px; border-radius: 4px; border: 1px solid rgba(245, 158, 11, 0.4); margin-left: 4px;">⚠️ 신고 진행 중 (집계율 불완전)</span>` 
+          : '';
+        html += `<div class="legend-row" style="color:${ind.color};"><span>● ${ind.expr} (${catLabel}):</span><span>${v.toLocaleString()} ${unit}${pendingBadge}</span></div>`;
       }
     });
     document.getElementById('legend-box').innerHTML = html;
@@ -867,17 +1023,15 @@
       const valElem = document.getElementById(`sub-val-${p.id}`);
       const v = p.dataMap[tKey];
       if (valElem) valElem.innerText = (v !== undefined && v !== null) ? `${v.toLocaleString()} ${p.unit}` : '-';
-      // Crosshair positions are handled centrally by syncCrosshair().
     });
   }
 
-  // ================= 측정 도구 (자 📏 / 각도기 📐) =================
   function calcPeriod(t1, t2) {
     if (!t1 || !t2) return "";
     const d1 = new Date(t1), d2 = new Date(t2);
     const start = d1 < d2 ? d1 : d2, end = d1 < d2 ? d2 : d1;
     let months = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
-    if (months === 0) return "당월";
+    if (months === 0) return (currentPeriodMode === 'yearly') ? "1년간" : "당월";
     if (months < 12) return `${months}개월간`;
     const y = Math.floor(months / 12), m = months % 12;
     return m > 0 ? `${y}년 ${m}개월간` : `${y}년간`;
@@ -996,7 +1150,7 @@
         badge.style.top = `${Math.max(46, Math.min(y1, y2) - 10)}px`;
 
         badge.innerHTML = `
-          <div class="val-main ${isUp ? 'up' : 'down'}">${isUp ? '+' : ''}${pct.toFixed(2)}% (${isUp ? '+' : ''}${diff.toLocaleString(undefined, {maximumFractionDigits:1})} 만원)</div>
+          <div class="val-main ${isUp ? 'up' : 'down'}">${isUp ? '+' : ''}${pct.toFixed(2)}% (${isUp ? '+' : ''}${diff.toLocaleString(undefined, {maximumFractionDigits:1})} 단위)</div>
           <div class="val-period">📅 ${p1.time || ''} ➔ ${p2.time || ''} (${calcPeriod(p1.time, p2.time)})</div>
         `;
       }
@@ -1024,7 +1178,7 @@
     }
   }
 
-  // ================= Symbol Search 모달 (코딩167.png 완벽 대응) =================
+  // ================= Symbol Search 모달 =================
   async function loadSymbols() {
     const res = await fetch('/api/symbols');
     const d = await res.json();
@@ -1055,39 +1209,34 @@
     }
   }
 
-  // 아래 카드 클릭 시 상단 글자창에 들어가고, 이미 '/'가 있으면 완성 후 확인 가능
   function handleCardClick(symName) {
     const inp = document.getElementById('tv-symbol-input');
     let cur = inp.value.trim();
 
     if (!cur) {
-      // 처음 클릭 ➔ 입력창에 반영
       inp.value = symName;
     } else if (cur.includes('/')) {
-      // 이미 '/'가 있는 경우 ➔ 뒤쪽에 붙이고 최종 확인 가능하게 세팅
       const parts = cur.split('/');
       inp.value = `${parts[0].trim()} / ${symName}`;
     } else {
-      // 이미 첫 번째 지역이 있을 때 또 클릭하면 교체
       inp.value = symName;
     }
   }
 
-  // 모달 확인 버튼 클릭
   async function submitModalExpr() {
     const expr = document.getElementById('tv-symbol-input').value.trim();
     if (!expr) return;
     closeRegionModal();
 
-    if (activeIndicators.length >= 5) {
-      alert("최대 5개 지표까지 추가 가능합니다.");
+    if (activeIndicators.length >= 6) {
+      alert("최대 6개 지표까지 메인 차트에 추가 가능합니다.");
       return;
     }
 
     const usedColors = activeIndicators.map(i => i.color);
     const color = PALETTE.find(c => !usedColors.includes(c)) || '#2962ff';
 
-    const newInd = { id: Date.now(), expr: expr, cat: currentAreaCat, color: color, series: null, dataMap: {} };
+    const newInd = { id: Date.now(), expr: expr, cat: currentAreaCat, color: color, series: null, rawSeries: [], dataMap: {}, isIndex: false, unit: '만/평' };
     activeIndicators.push(newInd);
     await drawSeries(newInd);
     renderTags();
@@ -1130,7 +1279,7 @@
             <span class="card-title">${item.symbol}</span>
             <span class="card-badge" style="background:${bColor};">${item.category.slice(0,2)}</span>
           </div>
-          <span class="card-desc">${item.desc} (클릭 시 상단 입력창에 반영)</span>
+          <span class="card-desc">${item.desc}</span>
         </div>
       `;
     });
@@ -1141,22 +1290,34 @@
     const d = await res.json();
 
     if (d.series && d.series.length > 0) {
-      const s = mainChart.addLineSeries({ color: ind.color, lineWidth: 2 });
-      setSynchronizedData(s, d.series);
-        ind.series = s;
-        if (d.series.length > 0) {
-          const lastItem = d.series[d.series.length - 1];
-          ind.lastTime = lastItem.time;
-          s.setMarkers([{
-            time: lastItem.time,
-            position: 'aboveBar',
-            color: '#f59e0b',
-            shape: 'arrowDown',
-            text: '⚠️'
-          }]);
-        }
-        ind.dataMap = {};
-      d.series.forEach(item => { ind.dataMap[item.time] = item.value; });
+      ind.rawSeries = d.series;
+      const s = mainChart.addLineSeries({ 
+        color: ind.color, 
+        lineWidth: 2,
+        priceScaleId: 'right'
+      });
+      ind.series = s;
+
+      const displayData = (currentPeriodMode === 'yearly') 
+        ? convertMonthlyToYearly(d.series, 'avg') 
+        : d.series;
+
+      setSynchronizedData(s, displayData);
+      
+      if (displayData.length > 0) {
+        const lastItem = displayData[displayData.length - 1];
+        ind.lastTime = lastItem.time;
+        s.setMarkers([{
+          time: lastItem.time,
+          position: 'aboveBar',
+          color: ind.color,
+          shape: 'arrowDown',
+          text: (currentPeriodMode === 'yearly') ? '연간' : '⚠️'
+        }]);
+      }
+      
+      ind.dataMap = {};
+      displayData.forEach(item => { ind.dataMap[item.time] = item.value; });
       fitMainDataRange();
     } else {
       alert(`${ind.expr} 실거래가 데이터가 없습니다.`);
@@ -1164,11 +1325,129 @@
     }
   }
 
+  // ================= 매매가격지수 상단 메인 차트 직접 그리기 (고유 색상 자동 할당) =================
+  const STANDARD_REGIONS = [
+    { code: '대구', name: '대구광역시' },
+    { code: '서울', name: '서울특별시' },
+    { code: '부산', name: '부산광역시' },
+    { code: '경기', name: '경기도' },
+    { code: '인천', name: '인천광역시' },
+    { code: '세종', name: '세종특별자치시' },
+    { code: '대전', name: '대전광역시' },
+    { code: '광주', name: '광주광역시' },
+    { code: '울산', name: '울산광역시' },
+    { code: '전국', name: '전국 전체' },
+    { code: '충남', name: '충청남도' },
+    { code: '충북', name: '충청북도' },
+    { code: '경북', name: '경상북도' },
+    { code: '경남', name: '경상남도' },
+    { code: '전북', name: '전북특별자치도' },
+    { code: '전남', name: '전라남도' },
+    { code: '강원', name: '강원특별자치도' },
+    { code: '제주', name: '제주특별자치도' }
+  ];
+
+  function openPriceIndexModal() {
+    const grid = document.getElementById('price-index-region-grid');
+    grid.innerHTML = '';
+    STANDARD_REGIONS.forEach(reg => {
+      grid.innerHTML += `
+        <div class="select-card" style="text-align: center; padding: 12px 6px;" onclick="addPriceIndexToMain('${reg.code}')">
+          <span class="card-title" style="font-size: 0.95rem;">${reg.name}</span>
+          <span style="font-size: 0.75rem; color: #f59e0b; margin-top: 4px;">메인 차트에 추가 ➔</span>
+        </div>
+      `;
+    });
+    document.getElementById('price-index-modal').classList.add('show');
+  }
+
+  function closePriceIndexModal() {
+    document.getElementById('price-index-modal').classList.remove('show');
+  }
+
+  async function addPriceIndexToMain(regCode) {
+    closePriceIndexModal();
+
+    if (activeIndicators.length >= 6) {
+      alert("최대 6개 지표까지 메인 차트에 추가 가능합니다.");
+      return;
+    }
+
+    // 이미 사용 중인 색상을 피해 INDEX_PALETTE에서 고유 색상 선택
+    const usedColors = activeIndicators.map(i => i.color);
+    const color = INDEX_PALETTE.find(c => !usedColors.includes(c)) || 
+                  PALETTE.find(c => !usedColors.includes(c)) || 
+                  '#f59e0b';
+
+    const res = await fetch(`/api/indicator_series?ind_id=SALE_PRICE_INDEX&region=${encodeURIComponent(regCode)}`);
+    const d = await res.json();
+
+    if (!d.series || d.series.length === 0) {
+      alert(`${regCode} 매매가격지수 데이터가 없습니다.`);
+      return;
+    }
+
+    // 메인 차트 좌측 Y축 활성화
+    mainChart.applyOptions({
+      leftPriceScale: {
+        visible: true,
+        borderColor: '#2a2e39',
+        autoScale: true
+      }
+    });
+
+    // 메인 차트에 좌측 Y축 바인딩 라인 생성 (고유 색상 적용)
+    const s = mainChart.addLineSeries({
+      color: color,
+      lineWidth: 2,
+      priceScaleId: 'left',
+      priceFormat: {
+        type: 'custom',
+        formatter: price => Number(price).toFixed(1) + ' pt'
+      }
+    });
+
+    const rawSeries = d.series;
+    const displayData = (currentPeriodMode === 'yearly') 
+      ? convertMonthlyToYearly(rawSeries, 'avg') 
+      : rawSeries;
+
+    setSynchronizedData(s, displayData);
+
+    const dataMap = {};
+    displayData.forEach(item => { dataMap[item.time] = item.value; });
+
+    const newInd = {
+      id: Date.now(),
+      expr: `${regCode} 매매가격지수`,
+      cat: 'INDEX',
+      color: color,
+      series: s,
+      rawSeries: rawSeries,
+      dataMap: dataMap,
+      isIndex: true,
+      unit: 'pt'
+    };
+
+    activeIndicators.push(newInd);
+    renderTags();
+    fitMainDataRange();
+  }
+
   function removeInd(id) {
     const idx = activeIndicators.findIndex(i => i.id === id);
     if (idx !== -1) {
       if (activeIndicators[idx].series) mainChart.removeSeries(activeIndicators[idx].series);
       activeIndicators.splice(idx, 1);
+
+      // 매매가격지수가 모두 삭제되면 좌측 Y축 숨김 처리
+      const hasIndex = activeIndicators.some(i => i.isIndex);
+      if (!hasIndex && mainChart) {
+        mainChart.applyOptions({
+          leftPriceScale: { visible: false }
+        });
+      }
+
       renderTags();
       if (mainChart) fitMainDataRange();
       clearMeasure();
@@ -1179,11 +1458,12 @@
     const box = document.getElementById('tag-container');
     box.innerHTML = '';
     activeIndicators.forEach(ind => {
+      const catLabel = ind.isIndex ? '지수' : (CAT_LABELS[ind.cat] || ind.cat);
       box.innerHTML += `
         <div class="ind-tag" style="border-left: 3px solid ${ind.color};">
           <span class="dot" style="background:${ind.color};"></span>
           <span>${ind.expr}</span>
-          <span class="cat-label">${CAT_LABELS[ind.cat]}</span>
+          <span class="cat-label">${catLabel}</span>
           <button class="remove-btn" onclick="removeInd(${ind.id})">✕</button>
         </div>
       `;
@@ -1216,8 +1496,8 @@
 
     let list = allIndicators;
     if (tab === 'VAL') list = allIndicators.filter(i => ['가치평가', '시장/심리'].includes(i.category));
-    else if (tab === 'MACRO') list = allIndicators.filter(i => ['금리', '유동성'].includes(i.category));
-    else if (tab === 'SUPPLY') list = allIndicators.filter(i => ['공급', '수익률'].includes(i.category));
+    else if (tab === 'MACRO') list = allIndicators.filter(i => ['거시/금리', '금리', '유동성'].includes(i.category));
+    else if (tab === 'SUPPLY') list = allIndicators.filter(i => ['수급/수익률', '공급', '수익률'].includes(i.category));
 
     list.forEach(ind => {
       const regSelector = ind.is_regional ? `
@@ -1245,6 +1525,12 @@
     const sel = document.getElementById(`reg-${indId}`);
     const reg = sel ? sel.value : "전국";
     closeIndicatorModal();
+
+    // 보조지표 모달에서 매매가격지수를 골랐을 때도 상단 메인 차트로 자동 라우팅
+    if (indId === 'SALE_PRICE_INDEX' || indId === 'PRICE_INDEX') {
+      await addPriceIndexToMain(reg);
+      return;
+    }
 
     const ind = allIndicators.find(i => i.id === indId);
     if (!ind) return;
@@ -1299,21 +1585,38 @@
 
     const series = chart.addAreaSeries({ topColor: `${color}40`, bottomColor: `${color}00`, lineColor: color, lineWidth: 2 });
     registerSyncedChart(chart, chartBox);
-    setSynchronizedData(series, d.series);
 
+    const modeType = getIndicatorModeType(indId);
+    const rawSeries = d.series || [];
+    const displayData = (currentPeriodMode === 'yearly') 
+      ? convertMonthlyToYearly(rawSeries, modeType) 
+      : rawSeries;
+
+    setSynchronizedData(series, displayData);
     attachVerticalScaleAndPan(chartBox, chart, () => [series]);
 
     const resizeObserver = new ResizeObserver(() => scheduleSyncLayout());
     resizeObserver.observe(chartBox);
 
     const dataMap = {};
-    d.series.forEach(item => { dataMap[item.time] = item.value; });
+    displayData.forEach(item => { dataMap[item.time] = item.value; });
 
-    if (d.series.length > 0) {
-      document.getElementById(`sub-val-${panelId}`).innerText = `${d.series[d.series.length - 1].value.toLocaleString()} ${ind.unit}`;
+    if (displayData.length > 0) {
+      document.getElementById(`sub-val-${panelId}`).innerText = `${displayData[displayData.length - 1].value.toLocaleString()} ${ind.unit}`;
     }
 
-    activeSubPanels.push({ id: panelId, unit: ind.unit, chart, series, dataMap, wrap, resizer, resizeObserver });
+    activeSubPanels.push({ 
+      id: panelId, 
+      indId: indId, 
+      unit: ind.unit, 
+      chart, 
+      series, 
+      rawSeries, 
+      dataMap, 
+      wrap, 
+      resizer, 
+      resizeObserver 
+    });
 
     scheduleSyncLayout();
   }
@@ -1342,7 +1645,7 @@
 
   function moveSubPanel(panelId, direction) {
     const idx = activeSubPanels.findIndex(p => p.id === panelId);
-    if (idx === -1) return;
+    if (idx !== -1) return;
     const targetIdx = idx + direction;
     if (targetIdx < 0 || targetIdx >= activeSubPanels.length) return;
 
@@ -1417,17 +1720,18 @@
     await loadSymbols();
     await loadIndicators();
 
-    const ind1 = { id: 1, expr: '서울 전체', cat: '84', color: PALETTE[0], series: null, dataMap: {} };
+    const ind1 = { id: 1, expr: '서울 전체', cat: '84', color: PALETTE[0], series: null, rawSeries: [], dataMap: {}, isIndex: false, unit: '만/평' };
     activeIndicators.push(ind1);
     await drawSeries(ind1);
 
-    const ind2 = { id: 2, expr: '대구광역시', cat: '84', color: PALETTE[1], series: null, dataMap: {} };
+    const ind2 = { id: 2, expr: '대구광역시', cat: '84', color: PALETTE[1], series: null, rawSeries: [], dataMap: {}, isIndex: false, unit: '만/평' };
     activeIndicators.push(ind2);
     await drawSeries(ind2);
 
     renderTags();
   });
 </script>
+
 <!-- BEGIN SAFE_INDICATOR_REGIONS_V1 -->
 <script>
 (() => {
@@ -1456,7 +1760,6 @@
         } finally { clearTimeout(timer); }
       })();
       pending.set(id, request);
-      // Share concurrent requests only; reopening reflects the current DB.
       request.then(() => pending.delete(id), () => pending.delete(id));
     }
     return pending.get(id);

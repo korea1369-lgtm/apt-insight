@@ -210,7 +210,13 @@ def query_chart_from_db(pure_name: str, months: int, area_type: str, exclude_dir
     return start_str, max_date_row[0], df.to_dict('records')
 
 @app.get("/api/chart-data")
-def get_chart_data(apt_name: str = Query(...), months: int = Query(12), area_type: str = Query("84"), exclude_direct: bool = Query(False)):
+def get_chart_data(
+    apt_name: str = Query(...), 
+    months: int = Query(12), 
+    area_type: str = Query("84"), 
+    exclude_direct: bool = Query(False),
+    ma_period: int = Query(20, description="이동평균 계산 건수 (5, 10, 20)")
+):
     pure_name = clean_apt_name(apt_name)
     start_str, max_date, raw_records = query_chart_from_db(pure_name, months, area_type, exclude_direct)
     
@@ -259,10 +265,12 @@ def get_chart_data(apt_name: str = Query(...), months: int = Query(12), area_typ
         else: disp_badge = f"{round(cv, 1)}% (편차 큼)"
     else: disp_badge = "-"
 
+    # 선택된 ma_period(5, 10, 20) 적용
+    window_size = max(1, ma_period)
     prices = df['price'].tolist()
     ma_list, upper_list, lower_list = [], [], []
     for i in range(len(prices)):
-        window = prices[max(0, i - 19): i + 1]
+        window = prices[max(0, i - (window_size - 1)): i + 1]
         m, s = float(np.mean(window)), float(np.std(window))
         ma_list.append(round(m, 2))
         upper_list.append(round(m + (s * 2), 2))
@@ -735,6 +743,9 @@ UI_HTML = """
     .toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
     .tool-group { display: flex; align-items: center; gap: 10px; }
     select.period-select { padding: 7px 12px; font-size: 13.5px; border-radius: 8px; border: 1px solid #cbd5e1; background: #fff; font-weight: 600; }
+    .ma-filter-bar { display: inline-flex; background: #e2e8f0; padding: 2px; border-radius: 8px; gap: 2px; }
+    .btn-ma-period { padding: 5px 10px; font-size: 12.5px; font-weight: 700; border: none; border-radius: 6px; background: transparent; color: #475569; cursor: pointer; transition: all 0.15s; }
+    .btn-ma-period.active { background: #0f172a; color: #ffffff; box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
     .btn-toggle { padding: 6px 14px; font-size: 13px; font-weight: 600; border-radius: 8px; border: 1px solid var(--border); background: #fff; cursor: pointer; transition: all 0.2s; }
     .btn-toggle.active { background: #0284c7; color: #fff; border-color: #0284c7; }
     .btn-reset-zoom { padding: 6px 12px; font-size: 12.5px; font-weight: 700; border-radius: 8px; border: 1px solid #cbd5e1; background: #f8fafc; color: #334155; cursor: pointer; }
@@ -1036,6 +1047,27 @@ UI_HTML = """
           <div class="hub-action">인사이트 칼럼 보기 ➔</div>
         </div>
       </div>
+
+      <!-- 쿠팡 파트너스 다이나믹 배너 (홈 화면 하단) -->
+      <div style="margin-top: 36px; padding: 20px 16px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 4px 16px rgba(0,0,0,0.03);">
+        <div style="width: 100%; max-width: 680px; overflow-x: auto; display: flex; justify-content: center; min-height: 140px;">
+          <script src="https://ads-partners.coupang.com/g.js"></script>
+          <script>
+            new PartnersCoupang.G({
+              "id": 1038802,
+              "trackingCode": "AF5544731",
+              "subId": null,
+              "template": "carousel",
+              "width": "680",
+              "height": "140"
+            });
+          </script>
+        </div>
+        <p style="margin-top: 10px; font-size: 11.5px; color: #94a3b8; text-align: center;">
+          이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.
+        </p>
+      </div>
+
     </div>
 
     <!-- 2. 아파트 랭킹 뷰 -->
@@ -1130,7 +1162,17 @@ UI_HTML = """
           <div class="search-inputs-grid" id="searchInputsContainer"></div>
         </div>
         <div class="toolbar">
-          <div class="tool-group"><label style="font-size: 13.5px; font-weight: 600;">분석 주기:</label><select id="periodSelect" class="period-select" onchange="fetchAndRender()"></select></div>
+          <div class="tool-group">
+            <label style="font-size: 13.5px; font-weight: 600;">분석 주기:</label>
+            <select id="periodSelect" class="period-select" onchange="fetchAndRender()"></select>
+            
+            <label style="font-size: 13.5px; font-weight: 600; margin-left: 8px;">이동평균 기준:</label>
+            <div class="ma-filter-bar" id="maFilterBar">
+              <button class="btn-ma-period" onclick="setMaPeriod(5, this)">5건</button>
+              <button class="btn-ma-period" onclick="setMaPeriod(10, this)">10건</button>
+              <button class="btn-ma-period active" onclick="setMaPeriod(20, this)">20건</button>
+            </div>
+          </div>
           <div class="tool-group">
             <button id="toggleScatterBtn" class="btn-toggle active" onclick="toggleCategory('scatter')">● 실거래가 점</button>
             <button id="toggleSMABtn" class="btn-toggle active" onclick="toggleCategory('sma')">━ 이동평균선</button>
@@ -1148,8 +1190,8 @@ UI_HTML = """
               <div class="guide-title"><span>📌 조작 안내</span><span style="font-size: 11.5px; color: #059669; font-weight: 600;">✨ 마우스 휠 줌(확대/축소) & 드래그 이동(Pan) 지원</span></div>
               <div class="guide-grid">
                 <div class="guide-item"><strong>● 실거래가 점</strong>국토부 실거래 신고 건입니다. 마우스를 올리면 계약일, 층수, 전용면적을 확인합니다.</div>
-                <div class="guide-item"><strong>━ 20일 이동평균선</strong>직전 20건 거래의 흐름선입니다. 층별 급매 왜곡을 지우고 진짜 시세를 파악합니다.</div>
-                <div class="guide-item"><strong>╍ 볼린저 밴드</strong>통계적 정상 거래 범위(±2σ)입니다. 밴드가 좁을수록 단지 가격이 안정적입니다.</div>
+                <div class="guide-item"><strong id="guideMaLabel">━ 20건 이동평균선</strong>선택된 최근 건수(5/10/20건)의 흐름선입니다. 층별 왜곡을 지우고 진짜 시세를 파악합니다.</div>
+                <div class="guide-item"><strong>╍ 볼린저 밴드</strong>선택된 이평 기준의 정상 거래 범위(±2σ)입니다. 밴드가 좁을수록 단지 가격이 안정적입니다.</div>
                 <div class="guide-item"><strong>🔍 Y축 확대/이동</strong>휠로 가격 범위를 정밀 확대하고, 클릭 드래그로 위아래로 이동할 수 있습니다.</div>
               </div>
             </div>
@@ -1390,6 +1432,7 @@ UI_HTML = """
 
   let currentAreaMode = '84';
   let currentSlotCount = 3;
+  let currentMaPeriod = 20; // 기본 20건 이동평균
   let visibilityFlags = { scatter: true, sma: true, bb: true };
   let chart = null;
   let globalSlotResults = [];
@@ -1401,6 +1444,18 @@ UI_HTML = """
   }
 
   function resetChartZoom() { if (chart) chart.resetZoom(); }
+
+  function setMaPeriod(period, btn) {
+    currentMaPeriod = parseInt(period);
+    document.querySelectorAll('.btn-ma-period').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    
+    // 조작 안내 문구 갱신
+    const guide = document.getElementById('guideMaLabel');
+    if (guide) guide.innerText = `━ ${currentMaPeriod}건 이동평균선`;
+
+    fetchAndRender();
+  }
 
   function buildPeriodOptions() {
     const sel = document.getElementById('periodSelect');
@@ -1584,7 +1639,7 @@ UI_HTML = """
     results.forEach(r => html += `<td style="font-weight:700;">${r.data.stats?.max_price || '-'}</td>`);
     html += '</tr><tr><th class="metric-col"><span>5. 누적 평균가</span></th>';
     results.forEach(r => html += `<td style="font-weight:600;">${r.data.stats?.avg_price || '-'}</td>`);
-    html += '</tr><tr><th class="metric-col" style="color:#0284c7;"><span>└ 최근 이평시세</span></th>';
+    html += `</tr><tr><th class="metric-col" style="color:#0284c7;"><span>└ 최근 이평시세 (${currentMaPeriod}건)</span></th>`;
     results.forEach(r => html += `<td style="font-weight:700; color:#0284c7;">${r.data.stats?.latest_ma || '-'}</td>`);
     html += '</tr><tr><th class="metric-col" style="background:#f8fafc;">' +
       '<span>6. 가격 분산도</span>' +
@@ -1647,6 +1702,7 @@ UI_HTML = """
     const months = document.getElementById('periodSelect')?.value || 24;
     const areaMode = currentAreaMode;
     const excludeDirect = document.getElementById('excludeDirectChk')?.checked ? 'true' : 'false';
+    const maPeriod = currentMaPeriod;
     const requests = [];
     for (let i = 0; i < currentSlotCount; i++) {
       const input = document.getElementById(`aptInput${i + 1}`);
@@ -1657,7 +1713,13 @@ UI_HTML = """
       const slotResults = [];
       for (const { aptName, cfg } of requests) {
         try {
-          const params = new URLSearchParams({ apt_name: aptName, months, area_type: areaMode, exclude_direct: excludeDirect });
+          const params = new URLSearchParams({
+            apt_name: aptName, 
+            months: months, 
+            area_type: areaMode, 
+            exclude_direct: excludeDirect,
+            ma_period: maPeriod
+          });
           const res = await fetch(`/api/chart-data?${params}`);
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const data = await res.json();
@@ -1709,7 +1771,7 @@ UI_HTML = """
 
       datasets.push({ label: `${aptName} BB상단`, typeCategory: 'bb', data: upperArr, borderColor: cfg.color, borderDash: [4,4], borderWidth: 1.2, pointRadius: 0, fill: '+1', backgroundColor: cfg.fill, spanGaps: true, hidden: !visibilityFlags.bb });
       datasets.push({ label: `${aptName} BB하단`, typeCategory: 'bb', data: lowerArr, borderColor: cfg.color, borderDash: [4,4], borderWidth: 1.2, pointRadius: 0, fill: false, spanGaps: true, hidden: !visibilityFlags.bb });
-      datasets.push({ label: `${aptName} 이동평균`, typeCategory: 'sma', data: maArr, borderColor: cfg.color, borderWidth: 2.8, pointRadius: 0, fill: false, tension: 0.2, spanGaps: true, hidden: !visibilityFlags.sma });
+      datasets.push({ label: `${aptName} ${currentMaPeriod}건 이평`, typeCategory: 'sma', data: maArr, borderColor: cfg.color, borderWidth: 2.8, pointRadius: 0, fill: false, tension: 0.2, spanGaps: true, hidden: !visibilityFlags.sma });
       datasets.push({ label: `${aptName} 실거래`, typeCategory: 'scatter', type: 'scatter', data: scatterArr, backgroundColor: cfg.color, borderColor: 'transparent', pointRadius: 4.5, pointHoverRadius: 7, hidden: !visibilityFlags.scatter, details: detailsArr, pureName: aptName });
     });
 
@@ -2041,7 +2103,6 @@ UI_HTML = """
     const r = activeResizerImg.getBoundingClientRect();
     const rootRect = quillInstance.root.getBoundingClientRect();
     const m = modal.getBoundingClientRect();
-    // Hide handles when the image is outside the editor's scrolling viewport.
     if (!r.width || r.bottom <= rootRect.top || r.top >= rootRect.bottom) {
       box.style.display = 'none'; return;
     }
@@ -2075,7 +2136,6 @@ UI_HTML = """
       if (e.target.tagName === 'IMG') selectImage(e);
     }, true);
     root.addEventListener('load', updateResizerPosition, true);
-    // Capture before Quill's keyboard bindings, including focus on resize handles.
     document.addEventListener('keydown', e => {
       if (!modal.open || !activeResizerImg || e.isComposing || e.keyCode === 229) return;
       const inEditor = root.contains(e.target);
@@ -2091,7 +2151,6 @@ UI_HTML = """
       if (!blot) { removeResizers(); return; }
       e.preventDefault();
       e.stopImmediatePropagation();
-      // Finish any live drag before removing its target and detach drag listeners.
       removeResizers();
       const index = quillInstance.getIndex(blot);
       const history = quillInstance.getModule('history');
@@ -2403,7 +2462,7 @@ UI_HTML = """
         const id = encodeURIComponent(String(p.id));
         return `<article class="insight-card"><a href="/insight/${id}">
           <div class="insight-cover" data-category="${cat}">${img ? `<img src="${insightEscape(img)}" alt="${insightEscape(p.title)}" loading="lazy" onerror="this.replaceWith(document.createTextNode('📖'))">` : label.split(' ')[0]}</div>
-          <div class="insight-card-body"><span class="insight-badge">${label}</span>
+          <div class="insight-card-body"><span class="insight-badge">{label}</span>
           <h2>${insightEscape(p.title)}</h2><p class="insight-excerpt">${insightEscape(p.content)}</p>
           <div class="insight-meta"><time>${insightEscape((p.created_at || '').slice(0,10))}</time><span>조회 ${Number(p.views) || 0}</span></div></div></a>
           <button class="insight-quick" data-post-id="${insightEscape(p.id)}">빠른 보기 · 댓글</button></article>`;
