@@ -1048,19 +1048,24 @@ UI_HTML = """
         </div>
       </div>
 
-      <!-- 쿠팡 파트너스 배너 (홈 화면 하단) -->
-      <div style="margin-top: 36px; padding: 20px 16px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 4px 16px rgba(0,0,0,0.03);">
-        <div style="display: flex; justify-content: center; align-items: center; min-height: 50px;">
-          <a href="https://link.coupang.com/a/hOKSjAJ5J6" target="_blank" referrerpolicy="unsafe-url" rel="noopener noreferrer">
-            <img src="https://ads-partners.coupang.com/banners/1038815?trackingCode=AF5544731&subId=&traceId=V0-301-bae0f72e5e59e45f-I1038815&w=320&h=50" alt="쿠팡 배너" style="max-width: 100%; height: auto; display: block; border-radius: 6px;">
-          </a>
-        </div>
+      <!-- 쿠팡 파트너스 배너 (100% 로딩 보장형) -->
+      <div style="margin-top: 36px; padding: 18px 16px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 4px 16px rgba(0,0,0,0.03);">
+        <a href="https://link.coupang.com/a/hOKSjAJ5J6" target="_blank" referrerpolicy="unsafe-url" rel="noopener noreferrer" style="text-decoration: none; display: block; max-width: 360px; width: 100%;">
+          <div style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border: 1px solid #334155; border-radius: 12px; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 12px rgba(0,0,0,0.08); transition: transform 0.15s ease;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="background: #e11d48; color: #fff; font-size: 11px; font-weight: 800; padding: 3px 6px; border-radius: 4px; letter-spacing: -0.5px;">로켓특가</span>
+              <div style="display: flex; flex-direction: column;">
+                <span style="color: #ffffff; font-size: 13.5px; font-weight: 800; letter-spacing: -0.3px;">쿠팡 오늘 최저가 혜택 보기</span>
+                <span style="color: #94a3b8; font-size: 11px;">로켓배송 무료배송 · 로켓프레시 바로가기</span>
+              </div>
+            </div>
+            <span style="color: #38bdf8; font-size: 14px; font-weight: 800;">➔</span>
+          </div>
+        </a>
         <p style="margin-top: 10px; font-size: 11.5px; color: #94a3b8; text-align: center;">
           이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.
         </p>
       </div>
-
-    </div>
 
     <!-- 2. 아파트 랭킹 뷰 -->
     <div class="page-view" id="page-rank">
