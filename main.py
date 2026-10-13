@@ -1048,20 +1048,12 @@ UI_HTML = """
         </div>
       </div>
 
-     <!-- 쿠팡 파트너스 다이나믹 배너 (홈 화면 하단) -->
+      <!-- 쿠팡 파트너스 배너 (홈 화면 하단) -->
       <div style="margin-top: 36px; padding: 20px 16px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 4px 16px rgba(0,0,0,0.03);">
-        <div style="width: 100%; max-width: 680px; overflow-x: auto; display: flex; justify-content: center; min-height: 140px;">
-          <script src="https://static.coupangcdn.com/g.js"></script>
-          <script>
-            new PartnersCoupang.G({
-              "id": 1038802,
-              "trackingCode": "AF5544731",
-              "subId": null,
-              "template": "carousel",
-              "width": "680",
-              "height": "140"
-            });
-          </script>
+        <div style="display: flex; justify-content: center; align-items: center; min-height: 50px;">
+          <a href="https://link.coupang.com/a/hOKSjAJ5J6" target="_blank" referrerpolicy="unsafe-url" rel="noopener noreferrer">
+            <img src="https://ads-partners.coupang.com/banners/1038815?trackingCode=AF5544731&subId=&traceId=V0-301-bae0f72e5e59e45f-I1038815&w=320&h=50" alt="쿠팡 배너" style="max-width: 100%; height: auto; display: block; border-radius: 6px;">
+          </a>
         </div>
         <p style="margin-top: 10px; font-size: 11.5px; color: #94a3b8; text-align: center;">
           이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.
