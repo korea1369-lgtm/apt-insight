@@ -1066,6 +1066,7 @@ UI_HTML = """
           이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.
         </p>
       </div>
+    </div>
 
     <!-- 2. 아파트 랭킹 뷰 -->
     <div class="page-view" id="page-rank">
@@ -2459,7 +2460,7 @@ UI_HTML = """
         const id = encodeURIComponent(String(p.id));
         return `<article class="insight-card"><a href="/insight/${id}">
           <div class="insight-cover" data-category="${cat}">${img ? `<img src="${insightEscape(img)}" alt="${insightEscape(p.title)}" loading="lazy" onerror="this.replaceWith(document.createTextNode('📖'))">` : label.split(' ')[0]}</div>
-          <div class="insight-card-body"><span class="insight-badge">{label}</span>
+          <div class="insight-card-body"><span class="insight-badge">${label}</span>
           <h2>${insightEscape(p.title)}</h2><p class="insight-excerpt">${insightEscape(p.content)}</p>
           <div class="insight-meta"><time>${insightEscape((p.created_at || '').slice(0,10))}</time><span>조회 ${Number(p.views) || 0}</span></div></div></a>
           <button class="insight-quick" data-post-id="${insightEscape(p.id)}">빠른 보기 · 댓글</button></article>`;
